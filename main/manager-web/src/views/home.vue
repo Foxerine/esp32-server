@@ -8,12 +8,11 @@
         <div class="add-device">
           <div class="add-device-bg">
             <div class="hellow-text" style="margin-top: 30px;">
-              你好，小智
+              让Pecho，
             </div>
             <div class="hellow-text">
-              让我们度过
               <div style="display: inline-block;color: #5778FF;">
-                美好的一天！
+                陪你度过每一天！
               </div>
             </div>
             <div class="hi-hint">
