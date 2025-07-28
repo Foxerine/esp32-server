@@ -1,0 +1,863 @@
+# Vue.js前端开发规范
+
+## 基本规范
+
+### Vue官方风格指南
+- **严格遵循Vue.js官方风格指南**
+- 组件命名使用PascalCase：`DeviceManagement.vue`
+- 方法命名使用camelCase：`handleClick`、`loadData`
+- 使用ESLint + Prettier进行代码格式化
+
+### 文件和目录命名
+```
+src/
+├── components/           # 公共组件，使用PascalCase
+│   ├── BaseTable.vue
+│   ├── SearchForm.vue
+│   └── UserAvatar.vue
+├── views/               # 页面组件，使用PascalCase
+│   ├── DeviceManagement.vue
+│   ├── UserManagement.vue
+│   └── Login.vue
+├── apis/               # API接口，使用camelCase
+│   └── deviceApi.js
+└── utils/              # 工具函数，使用camelCase
+    └── dateUtils.js
+```
+
+## Vue组件规范
+
+### 单文件组件结构
+```vue
+<template>
+  <div class="device-management">
+    <!-- 模板内容 -->
+    <el-card class="search-card">
+      <search-form
+        :fields="searchFields"
+        :value="searchForm"
+        @search="handleSearch"
+        @reset="handleReset" />
+    </el-card>
+    
+    <el-card class="table-card">
+      <div slot="header" class="table-header">
+        <span>设备列表</span>
+        <el-button type="primary" @click="handleAdd">添加设备</el-button>
+      </div>
+      
+      <base-table
+        :data="deviceList"
+        :columns="tableColumns"
+        :loading="loading"
+        :pagination="pagination"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange">
+        
+        <template #actions="{ row }">
+          <el-button size="mini" @click="handleEdit(row)">编辑</el-button>
+          <el-button size="mini" type="danger" @click="handleDelete(row)">删除</el-button>
+        </template>
+      </base-table>
+    </el-card>
+  </div>
+</template>
+
+<script>
+import { mapState, mapActions } from 'vuex'
+import SearchForm from '@/components/SearchForm.vue'
+import BaseTable from '@/components/BaseTable.vue'
+import { getDeviceList, deleteDevice } from '@/apis/deviceApi'
+
+export default {
+  name: 'DeviceManagement',
+  
+  components: {
+    SearchForm,
+    BaseTable
+  },
+  
+  data() {
+    return {
+      loading: false,
+      searchForm: {
+        deviceName: '',
+        deviceType: ''
+      },
+      pagination: {
+        page: 1,
+        size: 10,
+        total: 0
+      },
+      searchFields: [
+        {
+          prop: 'deviceName',
+          label: '设备名称',
+          type: 'input',
+          placeholder: '请输入设备名称'
+        },
+        {
+          prop: 'deviceType',
+          label: '设备类型',
+          type: 'select',
+          placeholder: '请选择设备类型',
+          options: [
+            { label: 'ESP32', value: 'ESP32' },
+            { label: 'ESP8266', value: 'ESP8266' }
+          ]
+        }
+      ],
+      tableColumns: [
+        { prop: 'id', label: 'ID', width: 80 },
+        { prop: 'deviceName', label: '设备名称' },
+        { prop: 'deviceType', label: '设备类型' },
+        { prop: 'status', label: '状态', slot: 'status' },
+        { prop: 'createTime', label: '创建时间' }
+      ]
+    }
+  },
+  
+  computed: {
+    ...mapState('device', ['deviceList'])
+  },
+  
+  mounted() {
+    this.loadDeviceList()
+  },
+  
+  methods: {
+    ...mapActions('device', ['getDeviceList']),
+    
+    async loadDeviceList() {
+      try {
+        this.loading = true
+        const params = {
+          ...this.searchForm,
+          ...this.pagination
+        }
+        const response = await getDeviceList(params)
+        // 处理响应数据
+      } catch (error) {
+        this.$message.error('加载数据失败')
+        console.error('Load device list error:', error)
+      } finally {
+        this.loading = false
+      }
+    },
+    
+    handleSearch(searchData) {
+      this.searchForm = { ...searchData }
+      this.pagination.page = 1
+      this.loadDeviceList()
+    },
+    
+    handleReset() {
+      this.searchForm = {
+        deviceName: '',
+        deviceType: ''
+      }
+      this.pagination.page = 1
+      this.loadDeviceList()
+    },
+    
+    handleAdd() {
+      this.$router.push('/device/add')
+    },
+    
+    handleEdit(row) {
+      this.$router.push(`/device/edit/${row.id}`)
+    },
+    
+    async handleDelete(row) {
+      try {
+        await this.$confirm('确认删除该设备吗？', '提示', {
+          type: 'warning'
+        })
+        
+        await deleteDevice(row.id)
+        this.$message.success('删除成功')
+        this.loadDeviceList()
+      } catch (error) {
+        if (error !== 'cancel') {
+          this.$message.error('删除失败')
+          console.error('Delete device error:', error)
+        }
+      }
+    },
+    
+    handleSizeChange(size) {
+      this.pagination.size = size
+      this.loadDeviceList()
+    },
+    
+    handleCurrentChange(page) {
+      this.pagination.page = page
+      this.loadDeviceList()
+    }
+  }
+}
+</script>
+
+<style lang="scss" scoped>
+.device-management {
+  .search-card {
+    margin-bottom: 20px;
+  }
+  
+  .table-card {
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  }
+}
+</style>
+```
+
+### 组件属性定义
+```vue
+<script>
+export default {
+  name: 'BaseTable',
+  
+  props: {
+    // 表格数据
+    data: {
+      type: Array,
+      default: () => [],
+      required: true
+    },
+    
+    // 表格列配置
+    columns: {
+      type: Array,
+      default: () => [],
+      required: true
+    },
+    
+    // 加载状态
+    loading: {
+      type: Boolean,
+      default: false
+    },
+    
+    // 是否显示选择框
+    selection: {
+      type: Boolean,
+      default: false
+    },
+    
+    // 分页配置
+    pagination: {
+      type: Object,
+      default: null,
+      validator(value) {
+        if (!value) return true
+        return value.hasOwnProperty('page') && 
+               value.hasOwnProperty('size') && 
+               value.hasOwnProperty('total')
+      }
+    }
+  },
+  
+  // 自定义事件
+  emits: [
+    'selection-change',
+    'size-change', 
+    'current-change'
+  ],
+  
+  data() {
+    return {
+      selectedRows: []
+    }
+  },
+  
+  methods: {
+    handleSelectionChange(selection) {
+      this.selectedRows = selection
+      this.$emit('selection-change', selection)
+    },
+    
+    handleSizeChange(size) {
+      this.$emit('size-change', size)
+    },
+    
+    handleCurrentChange(page) {
+      this.$emit('current-change', page)
+    }
+  }
+}
+</script>
+```
+
+## Vuex状态管理规范
+
+### 模块化状态管理
+```javascript
+// store/modules/device.js
+const state = {
+  deviceList: [],
+  total: 0,
+  loading: false,
+  currentDevice: null
+}
+
+const mutations = {
+  SET_DEVICE_LIST(state, { list, total }) {
+    state.deviceList = list
+    state.total = total
+  },
+  
+  SET_LOADING(state, loading) {
+    state.loading = loading
+  },
+  
+  SET_CURRENT_DEVICE(state, device) {
+    state.currentDevice = device
+  },
+  
+  ADD_DEVICE(state, device) {
+    state.deviceList.unshift(device)
+    state.total++
+  },
+  
+  UPDATE_DEVICE(state, updatedDevice) {
+    const index = state.deviceList.findIndex(item => item.id === updatedDevice.id)
+    if (index !== -1) {
+      state.deviceList.splice(index, 1, updatedDevice)
+    }
+  },
+  
+  DELETE_DEVICE(state, deviceId) {
+    const index = state.deviceList.findIndex(item => item.id === deviceId)
+    if (index !== -1) {
+      state.deviceList.splice(index, 1)
+      state.total--
+    }
+  }
+}
+
+const actions = {
+  async getDeviceList({ commit }, params) {
+    commit('SET_LOADING', true)
+    try {
+      const response = await getDeviceList(params)
+      const { list, total } = response.data
+      commit('SET_DEVICE_LIST', { list, total })
+      return response
+    } catch (error) {
+      console.error('Get device list error:', error)
+      throw error
+    } finally {
+      commit('SET_LOADING', false)
+    }
+  },
+  
+  async createDevice({ commit }, deviceData) {
+    try {
+      const response = await createDevice(deviceData)
+      commit('ADD_DEVICE', response.data)
+      return response
+    } catch (error) {
+      console.error('Create device error:', error)
+      throw error
+    }
+  },
+  
+  async updateDevice({ commit }, { id, data }) {
+    try {
+      const response = await updateDevice(id, data)
+      commit('UPDATE_DEVICE', response.data)
+      return response
+    } catch (error) {
+      console.error('Update device error:', error)
+      throw error
+    }
+  },
+  
+  async deleteDevice({ commit }, deviceId) {
+    try {
+      await deleteDevice(deviceId)
+      commit('DELETE_DEVICE', deviceId)
+    } catch (error) {
+      console.error('Delete device error:', error)
+      throw error
+    }
+  }
+}
+
+const getters = {
+  onlineDevices: state => {
+    return state.deviceList.filter(device => device.status === 'ONLINE')
+  },
+  
+  deviceCountByType: state => {
+    const countMap = {}
+    state.deviceList.forEach(device => {
+      countMap[device.deviceType] = (countMap[device.deviceType] || 0) + 1
+    })
+    return countMap
+  }
+}
+
+export default {
+  namespaced: true,
+  state,
+  mutations,
+  actions,
+  getters
+}
+```
+
+### 在组件中使用Vuex
+```vue
+<script>
+import { mapState, mapActions, mapGetters } from 'vuex'
+
+export default {
+  computed: {
+    // 映射state
+    ...mapState('device', ['deviceList', 'loading', 'total']),
+    
+    // 映射getters
+    ...mapGetters('device', ['onlineDevices', 'deviceCountByType']),
+    
+    // 自定义计算属性
+    hasDevices() {
+      return this.deviceList.length > 0
+    }
+  },
+  
+  methods: {
+    // 映射actions
+    ...mapActions('device', [
+      'getDeviceList',
+      'createDevice', 
+      'updateDevice',
+      'deleteDevice'
+    ]),
+    
+    // 组件方法
+    async loadData() {
+      try {
+        await this.getDeviceList({ page: 1, size: 10 })
+      } catch (error) {
+        this.$message.error('加载数据失败')
+      }
+    }
+  }
+}
+</script>
+```
+
+## API接口管理规范
+
+### HTTP请求封装
+```javascript
+// utils/request.js
+import axios from 'axios'
+import { Message, MessageBox } from 'element-ui'
+import store from '@/store'
+import router from '@/router'
+
+// 创建axios实例
+const service = axios.create({
+  baseURL: process.env.VUE_APP_API_BASE_URL || '/api',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// 请求拦截器
+service.interceptors.request.use(
+  config => {
+    // 添加认证token
+    const token = store.getters['auth/token']
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`
+    }
+    
+    // 添加请求ID用于跟踪
+    config.headers['Request-ID'] = generateRequestId()
+    
+    return config
+  },
+  error => {
+    console.error('Request error:', error)
+    return Promise.reject(error)
+  }
+)
+
+// 响应拦截器
+service.interceptors.response.use(
+  response => {
+    const { code, message, data } = response.data
+    
+    // 请求成功
+    if (code === 200) {
+      return response.data
+    }
+    
+    // 业务错误
+    Message.error(message || '请求失败')
+    return Promise.reject(new Error(message || '请求失败'))
+  },
+  error => {
+    console.error('Response error:', error)
+    
+    if (error.response) {
+      const { status, data } = error.response
+      
+      switch (status) {
+        case 401:
+          Message.error('登录已过期，请重新登录')
+          store.dispatch('auth/logout')
+          router.push('/login')
+          break
+        case 403:
+          Message.error('没有权限访问')
+          break
+        case 404:
+          Message.error('请求的资源不存在')
+          break
+        case 500:
+          Message.error('服务器内部错误')
+          break
+        default:
+          Message.error(data.message || '请求失败')
+      }
+    } else if (error.code === 'ECONNABORTED') {
+      Message.error('请求超时，请稍后重试')
+    } else {
+      Message.error('网络错误，请检查网络连接')
+    }
+    
+    return Promise.reject(error)
+  }
+)
+
+function generateRequestId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+}
+
+export default service
+```
+
+### API模块定义
+```javascript
+// apis/deviceApi.js
+import request from '@/utils/request'
+
+// 获取设备列表
+export function getDeviceList(params) {
+  return request({
+    url: '/v1/device',
+    method: 'get',
+    params
+  })
+}
+
+// 创建设备
+export function createDevice(data) {
+  return request({
+    url: '/v1/device',
+    method: 'post',
+    data
+  })
+}
+
+// 更新设备
+export function updateDevice(id, data) {
+  return request({
+    url: `/v1/device/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除设备
+export function deleteDevice(id) {
+  return request({
+    url: `/v1/device/${id}`,
+    method: 'delete'
+  })
+}
+
+// 获取设备详情
+export function getDeviceDetail(id) {
+  return request({
+    url: `/v1/device/${id}`,
+    method: 'get'
+  })
+}
+
+// 批量删除设备
+export function batchDeleteDevices(ids) {
+  return request({
+    url: '/v1/device/batch',
+    method: 'delete',
+    data: { ids }
+  })
+}
+```
+
+## 工具函数规范
+
+### 日期工具
+```javascript
+// utils/dateUtils.js
+import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import 'dayjs/locale/zh-cn'
+
+dayjs.extend(relativeTime)
+dayjs.locale('zh-cn')
+
+/**
+ * 格式化日期
+ * @param {Date|string|number} date - 日期
+ * @param {string} format - 格式化模板
+ * @returns {string} 格式化后的日期字符串
+ */
+export function formatDate(date, format = 'YYYY-MM-DD HH:mm:ss') {
+  if (!date) return ''
+  return dayjs(date).format(format)
+}
+
+/**
+ * 获取相对时间
+ * @param {Date|string|number} date - 日期
+ * @returns {string} 相对时间描述
+ */
+export function getRelativeTime(date) {
+  if (!date) return ''
+  return dayjs(date).fromNow()
+}
+
+/**
+ * 获取日期范围
+ * @param {string} type - 范围类型
+ * @returns {Array} 日期范围数组
+ */
+export function getDateRange(type) {
+  const now = dayjs()
+  
+  switch (type) {
+    case 'today':
+      return [now.startOf('day'), now.endOf('day')]
+    case 'yesterday':
+      return [now.subtract(1, 'day').startOf('day'), now.subtract(1, 'day').endOf('day')]
+    case 'week':
+      return [now.startOf('week'), now.endOf('week')]
+    case 'month':
+      return [now.startOf('month'), now.endOf('month')]
+    default:
+      return [now.subtract(7, 'day'), now]
+  }
+}
+```
+
+### 验证工具
+```javascript
+// utils/validators.js
+
+/**
+ * 验证手机号
+ * @param {string} phone - 手机号
+ * @returns {boolean} 验证结果
+ */
+export function validatePhone(phone) {
+  const reg = /^1[3-9]\d{9}$/
+  return reg.test(phone)
+}
+
+/**
+ * 验证邮箱
+ * @param {string} email - 邮箱地址
+ * @returns {boolean} 验证结果
+ */
+export function validateEmail(email) {
+  const reg = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return reg.test(email)
+}
+
+/**
+ * 验证密码强度
+ * @param {string} password - 密码
+ * @returns {boolean} 验证结果
+ */
+export function validatePassword(password) {
+  // 至少8位，包含大小写字母和数字
+  const reg = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$/
+  return reg.test(password)
+}
+
+/**
+ * 验证设备名称
+ * @param {string} name - 设备名称
+ * @returns {boolean} 验证结果
+ */
+export function validateDeviceName(name) {
+  // 只能包含字母、数字、中文和下划线
+  const reg = /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/
+  return reg.test(name)
+}
+```
+
+## 错误处理规范
+
+### 全局错误处理
+```javascript
+// main.js
+import Vue from 'vue'
+
+// 全局错误处理
+Vue.config.errorHandler = (err, vm, info) => {
+  console.error('Vue错误:', err)
+  console.error('组件信息:', info)
+  
+  // 发送错误报告到监控服务
+  if (process.env.NODE_ENV === 'production') {
+    reportError(err, vm, info)
+  }
+}
+
+// 全局未捕获的Promise错误
+window.addEventListener('unhandledrejection', event => {
+  console.error('未处理的Promise错误:', event.reason)
+  
+  // 发送错误报告
+  if (process.env.NODE_ENV === 'production') {
+    reportError(event.reason)
+  }
+})
+
+function reportError(error, vm, info) {
+  // 实现错误上报逻辑
+  // 可以使用Sentry、Bugsnag等错误监控服务
+}
+```
+
+### 组件内错误处理
+```vue
+<script>
+export default {
+  data() {
+    return {
+      error: null,
+      loading: false
+    }
+  },
+  
+  methods: {
+    async loadData() {
+      try {
+        this.loading = true
+        this.error = null
+        
+        const response = await this.getDeviceList()
+        // 处理成功响应
+      } catch (error) {
+        console.error('加载数据失败:', error)
+        this.error = error.message || '加载数据失败'
+        this.$message.error(this.error)
+      } finally {
+        this.loading = false
+      }
+    },
+    
+    handleRetry() {
+      this.loadData()
+    }
+  },
+  
+  // 错误边界
+  errorCaptured(err, vm, info) {
+    console.error('组件错误:', err)
+    console.error('错误信息:', info)
+    
+    // 返回false阻止错误继续传播
+    return false
+  }
+}
+</script>
+```
+
+## 性能优化规范
+
+### 组件懒加载
+```javascript
+// router/index.js
+const routes = [
+  {
+    path: '/device',
+    name: 'DeviceManagement',
+    component: () => import(/* webpackChunkName: "device" */ '@/views/DeviceManagement.vue'),
+    meta: { title: '设备管理', requiresAuth: true }
+  },
+  {
+    path: '/user',
+    name: 'UserManagement', 
+    component: () => import(/* webpackChunkName: "user" */ '@/views/UserManagement.vue'),
+    meta: { title: '用户管理', requiresAuth: true }
+  }
+]
+```
+
+### 计算属性优化
+```vue
+<script>
+export default {
+  computed: {
+    // 使用缓存的计算属性
+    filteredDevices() {
+      if (!this.searchKeyword) {
+        return this.deviceList
+      }
+      
+      return this.deviceList.filter(device => 
+        device.deviceName.toLowerCase().includes(this.searchKeyword.toLowerCase())
+      )
+    },
+    
+    // 避免在模板中使用复杂计算
+    deviceStatistics() {
+      return {
+        total: this.deviceList.length,
+        online: this.deviceList.filter(d => d.status === 'ONLINE').length,
+        offline: this.deviceList.filter(d => d.status === 'OFFLINE').length
+      }
+    }
+  }
+}
+</script>
+```
+
+### 列表优化
+```vue
+<template>
+  <!-- 使用v-for时必须添加key -->
+  <div v-for="device in deviceList" :key="device.id" class="device-item">
+    {{ device.deviceName }}
+  </div>
+  
+  <!-- 长列表虚拟滚动 -->
+  <virtual-list
+    :data="largeDataList"
+    :item-height="60"
+    :container-height="400">
+    <template #item="{ item }">
+      <div class="list-item">{{ item.name }}</div>
+    </template>
+  </virtual-list>
+</template>
+```
+
+记住：代码可读性、可维护性和用户体验是前端开发的核心目标。
+description:
+globs:
+alwaysApply: false
+---

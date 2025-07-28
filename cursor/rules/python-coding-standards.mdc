@@ -1,0 +1,336 @@
+# Python代码开发规范
+
+## 基本规范
+
+### PEP 8 规范
+- **严格遵循PEP 8代码风格指南**
+- 使用4个空格进行缩进，不使用制表符
+- 行长度限制在88个字符以内（Black格式化工具标准）
+- 导入语句按以下顺序：标准库 -> 第三方库 -> 本地模块
+
+### 类型注解（必需）
+```python
+from typing import Dict, List, Optional, Union, Any
+import asyncio
+
+async def process_data(self, data: str) -> Optional[str]:
+    """处理数据并返回结果"""
+    pass
+
+class AIProvider:
+    def __init__(self, config: Dict[str, Any]) -> None:
+        self.config = config
+    
+    async def process(self, input_data: bytes) -> Dict[str, Any]:
+        """处理输入数据"""
+        return {"result": "success"}
+```
+
+### 文档字符串（必需）
+```python
+def recognize_audio(audio_data: bytes, language: str = "zh-CN") -> str:
+    """
+    识别音频数据为文本
+    
+    Args:
+        audio_data: 音频数据字节流
+        language: 识别语言，默认为中文
+        
+    Returns:
+        识别出的文本内容
+        
+    Raises:
+        AudioProcessingError: 音频处理失败时抛出
+        ConfigurationError: 配置错误时抛出
+    """
+    pass
+```
+
+## 异步编程规范
+
+### 异步函数定义
+```python
+# 正确的异步编程模式
+async def handle_websocket_message(self, message: dict) -> dict:
+    """处理WebSocket消息"""
+    try:
+        # 并发处理多个任务
+        asr_task = asyncio.create_task(self.asr.recognize(message["audio"]))
+        intent_task = asyncio.create_task(self.intent.analyze(message["text"]))
+        
+        asr_result, intent_result = await asyncio.gather(asr_task, intent_task)
+        
+        return {
+            "asr": asr_result,
+            "intent": intent_result,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"处理消息失败: {e}")
+        raise
+```
+
+### 错误处理
+```python
+# 使用自定义异常类
+class XiaozhiException(Exception):
+    """小智基础异常"""
+    def __init__(self, message: str, error_code: str = None):
+        super().__init__(message)
+        self.message = message
+        self.error_code = error_code
+
+class ConfigException(XiaozhiException):
+    """配置异常"""
+    pass
+
+# 正确的异常处理方式
+async def process_request(self, data: dict) -> dict:
+    try:
+        result = await self.ai_service.process(data)
+        return success_response(result)
+    except ConfigException as e:
+        logger.error(f"配置错误: {e.message}")
+        return error_response(e.message, e.error_code)
+    except Exception as e:
+        logger.error(f"未知错误: {e}")
+        return error_response("内部服务器错误")
+```
+
+## AI服务提供商开发
+
+### 基类继承
+```python
+from abc import ABC, abstractmethod
+from typing import Dict, Any, Optional
+
+class BaseProvider(ABC):
+    """AI服务提供商基类"""
+    
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.logger = setup_logging()
+    
+    @abstractmethod
+    async def initialize(self) -> None:
+        """初始化提供商"""
+        pass
+    
+    @abstractmethod
+    async def process(self, data: Any) -> Any:
+        """处理数据"""
+        pass
+    
+    async def cleanup(self) -> None:
+        """清理资源"""
+        pass
+```
+
+### 具体实现示例
+```python
+class FunASR(BaseProvider):
+    """FunASR语音识别提供商"""
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self.model_dir = config.get("model_dir")
+        self.model = None
+    
+    async def initialize(self) -> None:
+        """初始化ASR模型"""
+        try:
+            from funasr import AutoModel
+            self.model = AutoModel(model=self.model_dir)
+            self.logger.info("FunASR模型初始化成功")
+        except Exception as e:
+            raise ConfigException(f"FunASR模型初始化失败: {e}")
+    
+    async def recognize(self, audio_data: bytes) -> str:
+        """识别音频为文本"""
+        if not self.model:
+            raise RuntimeError("模型未初始化")
+        
+        try:
+            result = self.model.generate(audio_data)
+            return result[0]["text"]
+        except Exception as e:
+            raise ProcessingException(f"语音识别失败: {e}")
+```
+
+## 插件开发规范
+
+### 插件函数定义
+```python
+from typing import Dict, Any, List
+
+def get_weather(city: str) -> Dict[str, Any]:
+    """
+    获取天气信息
+    
+    Args:
+        city: 城市名称
+        
+    Returns:
+        天气信息字典，包含温度、天气状况、湿度等信息
+        
+    Example:
+        >>> result = get_weather("北京")
+        >>> print(result)
+        {
+            "success": True,
+            "data": {
+                "city": "北京",
+                "temperature": 25,
+                "weather": "晴天",
+                "humidity": 60
+            }
+        }
+    """
+    try:
+        # 实现具体的天气查询逻辑
+        weather_data = query_weather_api(city)
+        
+        return {
+            "success": True,
+            "data": {
+                "city": city,
+                "temperature": weather_data.get("temp"),
+                "weather": weather_data.get("condition"),
+                "humidity": weather_data.get("humidity")
+            }
+        }
+    except Exception as e:
+        logger.error(f"天气查询失败: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+```
+
+## 日志记录规范
+
+### 结构化日志
+```python
+import logging
+from typing import Dict, Any
+
+# 使用结构化日志
+logger = logging.getLogger(__name__)
+
+def log_request(self, user_id: str, request_type: str, duration_ms: float):
+    """记录请求日志"""
+    logger.info("处理请求", extra={
+        "user_id": user_id,
+        "request_type": request_type,
+        "duration": duration_ms,
+        "timestamp": time.time()
+    })
+
+def log_error(self, error: Exception, context: Dict[str, Any]):
+    """记录错误日志"""
+    logger.error("处理错误", extra={
+        "error_type": type(error).__name__,
+        "error_message": str(error),
+        "context": context,
+        "timestamp": time.time()
+    }, exc_info=True)
+```
+
+## 性能优化规范
+
+### 缓存使用
+```python
+from core.utils.cache import CacheManager, CacheType
+
+class ServiceWithCache:
+    def __init__(self):
+        self.cache = CacheManager()
+    
+    async def get_config(self, key: str) -> Optional[Any]:
+        """获取配置，优先从缓存获取"""
+        # 先从缓存获取
+        cached_value = self.cache.get(CacheType.CONFIG, key)
+        if cached_value is not None:
+            return cached_value
+        
+        # 缓存未命中，从数据源获取
+        value = await self.load_config_from_source(key)
+        
+        # 存入缓存
+        self.cache.set(CacheType.CONFIG, key, value, ttl=300)
+        return value
+```
+
+### 性能监控
+```python
+import time
+from functools import wraps
+
+def monitor_performance(func_name: str):
+    """性能监控装饰器"""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            start_time = time.time()
+            try:
+                result = await func(*args, **kwargs)
+                return result
+            finally:
+                duration = time.time() - start_time
+                logger.info(f"函数 {func_name} 执行时间: {duration:.3f}s")
+        return wrapper
+    return decorator
+
+@monitor_performance("audio_processing")
+async def process_audio(self, audio_data: bytes) -> str:
+    """处理音频数据"""
+    pass
+```
+
+## 测试规范
+
+### 单元测试
+```python
+import pytest
+from unittest.mock import Mock, patch, AsyncMock
+
+class TestFunASR:
+    def setup_method(self):
+        """测试初始化"""
+        self.config = {
+            "model_dir": "test_models/funasr"
+        }
+        self.asr = FunASR(self.config)
+    
+    @pytest.mark.asyncio
+    async def test_recognize_success(self):
+        """测试语音识别成功场景"""
+        # 准备测试数据
+        audio_data = b"test_audio_data"
+        expected_result = "测试文本"
+        
+        # 模拟依赖
+        with patch('funasr.AutoModel') as mock_model:
+            mock_instance = AsyncMock()
+            mock_instance.generate.return_value = [{"text": expected_result}]
+            mock_model.return_value = mock_instance
+            
+            # 执行测试
+            await self.asr.initialize()
+            result = await self.asr.recognize(audio_data)
+            
+            # 验证结果
+            assert result == expected_result
+    
+    @pytest.mark.asyncio
+    async def test_recognize_failure(self):
+        """测试语音识别失败场景"""
+        with pytest.raises(ProcessingException):
+            await self.asr.recognize(b"invalid_audio")
+```
+
+记住：代码质量和可维护性始终是第一优先级。
+description:
+globs:
+alwaysApply: false
+---

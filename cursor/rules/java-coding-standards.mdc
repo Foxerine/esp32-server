@@ -1,0 +1,561 @@
+# Java代码开发规范
+
+## 基本规范
+
+### 阿里巴巴Java开发手册
+- **严格遵循阿里巴巴Java开发手册**
+- 使用驼峰命名法：类名PascalCase，方法名camelCase
+- 常量使用SCREAMING_SNAKE_CASE
+- 包名全小写，使用点分隔
+
+### Lombok使用规范
+```java
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+@Data
+@RequiredArgsConstructor
+@Slf4j
+public class DeviceDTO {
+    private Long id;
+    private String deviceName;
+    private String deviceType;
+    private LocalDateTime createTime;
+    
+    // Lombok自动生成getter、setter、toString等方法
+}
+```
+
+## Spring Boot架构规范
+
+### Controller层规范
+```java
+@RestController
+@RequestMapping("/api/v1/device")
+@Api(tags = "设备管理")
+@Slf4j
+@Validated
+public class DeviceController {
+    
+    private final DeviceService deviceService;
+    
+    public DeviceController(DeviceService deviceService) {
+        this.deviceService = deviceService;
+    }
+    
+    @GetMapping
+    @ApiOperation("获取设备列表")
+    public ResponseEntity<Result<PageResult<DeviceDTO>>> getDeviceList(
+            @RequestParam(defaultValue = "1") @Min(1) Integer page,
+            @RequestParam(defaultValue = "10") @Range(min = 1, max = 100) Integer size,
+            @RequestParam(required = false) String deviceName) {
+        
+        PageResult<DeviceDTO> result = deviceService.getDeviceList(page, size, deviceName);
+        return ResponseEntity.ok(Result.success(result));
+    }
+    
+    @PostMapping
+    @ApiOperation("创建设备")
+    public ResponseEntity<Result<DeviceDTO>> createDevice(
+            @RequestBody @Valid DeviceCreateRequest request) {
+        
+        DeviceDTO result = deviceService.createDevice(request);
+        return ResponseEntity.ok(Result.success(result));
+    }
+    
+    @PutMapping("/{id}")
+    @ApiOperation("更新设备")
+    public ResponseEntity<Result<DeviceDTO>> updateDevice(
+            @PathVariable @Positive Long id,
+            @RequestBody @Valid DeviceUpdateRequest request) {
+        
+        DeviceDTO result = deviceService.updateDevice(id, request);
+        return ResponseEntity.ok(Result.success(result));
+    }
+    
+    @DeleteMapping("/{id}")
+    @ApiOperation("删除设备")
+    public ResponseEntity<Result<Void>> deleteDevice(@PathVariable @Positive Long id) {
+        deviceService.deleteDevice(id);
+        return ResponseEntity.ok(Result.success(null));
+    }
+}
+```
+
+### Service层规范
+```java
+@Service
+@Transactional(rollbackFor = Exception.class)
+@Slf4j
+public class DeviceService {
+    
+    private final DeviceMapper deviceMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    public DeviceService(DeviceMapper deviceMapper, 
+                        RedisTemplate<String, Object> redisTemplate) {
+        this.deviceMapper = deviceMapper;
+        this.redisTemplate = redisTemplate;
+    }
+    
+    @Transactional(readOnly = true)
+    public PageResult<DeviceDTO> getDeviceList(Integer page, Integer size, String deviceName) {
+        // 构建查询条件
+        DeviceQuery query = DeviceQuery.builder()
+                .page(page)
+                .size(size)
+                .deviceName(deviceName)
+                .build();
+        
+        // 查询数据
+        List<Device> devices = deviceMapper.selectByQuery(query);
+        Long total = deviceMapper.countByQuery(query);
+        
+        // 转换为DTO
+        List<DeviceDTO> deviceDTOs = devices.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+        
+        return PageResult.<DeviceDTO>builder()
+                .list(deviceDTOs)
+                .total(total)
+                .page(page)
+                .size(size)
+                .build();
+    }
+    
+    public DeviceDTO createDevice(DeviceCreateRequest request) {
+        // 验证设备名称唯一性
+        if (deviceMapper.existsByDeviceName(request.getDeviceName())) {
+            throw new BusinessException("设备名称已存在", "DEVICE_NAME_EXISTS");
+        }
+        
+        // 创建设备实体
+        Device device = Device.builder()
+                .deviceName(request.getDeviceName())
+                .deviceType(request.getDeviceType())
+                .description(request.getDescription())
+                .status(DeviceStatus.OFFLINE)
+                .createTime(LocalDateTime.now())
+                .build();
+        
+        // 保存到数据库
+        deviceMapper.insert(device);
+        
+        // 清除缓存
+        clearDeviceCache();
+        
+        log.info("设备创建成功: {}", device.getDeviceName());
+        return convertToDTO(device);
+    }
+    
+    public DeviceDTO updateDevice(Long id, DeviceUpdateRequest request) {
+        // 查询设备
+        Device device = deviceMapper.selectById(id);
+        if (device == null) {
+            throw new BusinessException("设备不存在", "DEVICE_NOT_FOUND");
+        }
+        
+        // 更新设备信息
+        device.setDeviceName(request.getDeviceName());
+        device.setDeviceType(request.getDeviceType());
+        device.setDescription(request.getDescription());
+        device.setUpdateTime(LocalDateTime.now());
+        
+        deviceMapper.updateById(device);
+        
+        // 清除缓存
+        clearDeviceCache();
+        
+        log.info("设备更新成功: {}", device.getDeviceName());
+        return convertToDTO(device);
+    }
+    
+    public void deleteDevice(Long id) {
+        Device device = deviceMapper.selectById(id);
+        if (device == null) {
+            throw new BusinessException("设备不存在", "DEVICE_NOT_FOUND");
+        }
+        
+        deviceMapper.deleteById(id);
+        clearDeviceCache();
+        
+        log.info("设备删除成功: {}", device.getDeviceName());
+    }
+    
+    private DeviceDTO convertToDTO(Device device) {
+        return DeviceDTO.builder()
+                .id(device.getId())
+                .deviceName(device.getDeviceName())
+                .deviceType(device.getDeviceType())
+                .description(device.getDescription())
+                .status(device.getStatus())
+                .createTime(device.getCreateTime())
+                .updateTime(device.getUpdateTime())
+                .build();
+    }
+    
+    private void clearDeviceCache() {
+        Set<String> keys = redisTemplate.keys("device:*");
+        if (!CollectionUtils.isEmpty(keys)) {
+            redisTemplate.delete(keys);
+        }
+    }
+}
+```
+
+### 数据访问层规范
+```java
+@Mapper
+public interface DeviceMapper {
+    
+    /**
+     * 根据查询条件获取设备列表
+     */
+    List<Device> selectByQuery(DeviceQuery query);
+    
+    /**
+     * 根据查询条件统计设备数量
+     */
+    Long countByQuery(DeviceQuery query);
+    
+    /**
+     * 根据ID查询设备
+     */
+    Device selectById(Long id);
+    
+    /**
+     * 插入设备
+     */
+    int insert(Device device);
+    
+    /**
+     * 根据ID更新设备
+     */
+    int updateById(Device device);
+    
+    /**
+     * 根据ID删除设备
+     */
+    int deleteById(Long id);
+    
+    /**
+     * 检查设备名称是否存在
+     */
+    boolean existsByDeviceName(String deviceName);
+}
+```
+
+## 异常处理规范
+
+### 自定义异常
+```java
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class BusinessException extends RuntimeException {
+    
+    private String code;
+    private String message;
+    
+    public BusinessException(String message) {
+        super(message);
+        this.code = "BUSINESS_ERROR";
+        this.message = message;
+    }
+    
+    public BusinessException(String message, String code) {
+        super(message);
+        this.code = code;
+        this.message = message;
+    }
+    
+    public BusinessException(String message, String code, Throwable cause) {
+        super(message, cause);
+        this.code = code;
+        this.message = message;
+    }
+}
+```
+
+### 全局异常处理
+```java
+@RestControllerAdvice
+@Slf4j
+public class GlobalExceptionHandler {
+    
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<Result<String>> handleBusinessException(BusinessException e) {
+        log.error("业务异常: {}", e.getMessage());
+        return ResponseEntity.ok(Result.error(e.getCode(), e.getMessage()));
+    }
+    
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Result<String>> handleValidationException(MethodArgumentNotValidException e) {
+        StringBuilder message = new StringBuilder();
+        e.getBindingResult().getFieldErrors().forEach(error -> 
+            message.append(error.getField()).append(": ").append(error.getDefaultMessage()).append("; ")
+        );
+        
+        log.error("参数验证失败: {}", message.toString());
+        return ResponseEntity.ok(Result.error("VALIDATION_ERROR", message.toString()));
+    }
+    
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Result<String>> handleException(Exception e) {
+        log.error("系统异常", e);
+        return ResponseEntity.ok(Result.error("SYSTEM_ERROR", "系统内部错误"));
+    }
+}
+```
+
+## 数据验证规范
+
+### 请求对象验证
+```java
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class DeviceCreateRequest {
+    
+    @NotBlank(message = "设备名称不能为空")
+    @Length(max = 50, message = "设备名称长度不能超过50个字符")
+    private String deviceName;
+    
+    @NotBlank(message = "设备类型不能为空")
+    @Pattern(regexp = "^(ESP32|ESP8266)$", message = "设备类型只能是ESP32或ESP8266")
+    private String deviceType;
+    
+    @Length(max = 200, message = "设备描述长度不能超过200个字符")
+    private String description;
+}
+```
+
+### 自定义验证器
+```java
+@Target({ElementType.FIELD})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = DeviceNameValidator.class)
+@Documented
+public @interface ValidDeviceName {
+    String message() default "设备名称格式不正确";
+    Class<?>[] groups() default {};
+    Class<? extends Payload>[] payload() default {};
+}
+
+public class DeviceNameValidator implements ConstraintValidator<ValidDeviceName, String> {
+    
+    @Override
+    public boolean isValid(String value, ConstraintValidatorContext context) {
+        if (value == null || value.trim().isEmpty()) {
+            return false;
+        }
+        // 设备名称只能包含字母、数字、中文和下划线
+        return value.matches("^[a-zA-Z0-9_\\u4e00-\\u9fa5]+$");
+    }
+}
+```
+
+## 配置管理规范
+
+### 配置类
+```java
+@Configuration
+@EnableConfigurationProperties({AppProperties.class})
+public class AppConfig {
+    
+    @Bean
+    @ConditionalOnProperty(name = "app.cache.enabled", havingValue = "true", matchIfMissing = true)
+    public CacheManager cacheManager(RedisConnectionFactory factory) {
+        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofMinutes(30))
+                .serializeKeysWith(RedisSerializationContext.SerializationPair
+                        .fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair
+                        .fromSerializer(new GenericJackson2JsonRedisSerializer()));
+        
+        return RedisCacheManager.builder(factory)
+                .cacheDefaults(config)
+                .build();
+    }
+}
+
+@ConfigurationProperties(prefix = "app")
+@Data
+@Validated
+public class AppProperties {
+    
+    @Valid
+    private Cache cache = new Cache();
+    
+    @Valid
+    private Security security = new Security();
+    
+    @Data
+    public static class Cache {
+        private boolean enabled = true;
+        
+        @Min(1)
+        private int defaultTtl = 30;
+    }
+    
+    @Data
+    public static class Security {
+        @NotBlank
+        private String jwtSecret;
+        
+        @Min(1)
+        private long jwtExpiration = 86400;
+    }
+}
+```
+
+## 缓存使用规范
+
+### Spring Cache注解
+```java
+@Service
+public class ConfigService {
+    
+    @Cacheable(value = "config", key = "#key")
+    public String getConfig(String key) {
+        // 从数据库获取配置
+        return configMapper.selectByKey(key);
+    }
+    
+    @CachePut(value = "config", key = "#key")
+    public String updateConfig(String key, String value) {
+        configMapper.updateByKey(key, value);
+        return value;
+    }
+    
+    @CacheEvict(value = "config", key = "#key")
+    public void deleteConfig(String key) {
+        configMapper.deleteByKey(key);
+    }
+    
+    @CacheEvict(value = "config", allEntries = true)
+    public void clearAllConfig() {
+        log.info("清空所有配置缓存");
+    }
+}
+```
+
+## 测试规范
+
+### 单元测试
+```java
+@SpringBootTest
+@TestPropertySource(locations = "classpath:application-test.properties")
+class DeviceServiceTest {
+    
+    @Autowired
+    private DeviceService deviceService;
+    
+    @MockBean
+    private DeviceMapper deviceMapper;
+    
+    @MockBean
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Test
+    void testCreateDevice_Success() {
+        // 准备测试数据
+        DeviceCreateRequest request = DeviceCreateRequest.builder()
+                .deviceName("测试设备")
+                .deviceType("ESP32")
+                .description("测试设备描述")
+                .build();
+        
+        Device savedDevice = Device.builder()
+                .id(1L)
+                .deviceName("测试设备")
+                .deviceType("ESP32")
+                .description("测试设备描述")
+                .status(DeviceStatus.OFFLINE)
+                .createTime(LocalDateTime.now())
+                .build();
+        
+        // Mock方法调用
+        when(deviceMapper.existsByDeviceName("测试设备")).thenReturn(false);
+        when(deviceMapper.insert(any(Device.class))).thenReturn(1);
+        
+        // 执行测试
+        DeviceDTO result = deviceService.createDevice(request);
+        
+        // 验证结果
+        assertThat(result).isNotNull();
+        assertThat(result.getDeviceName()).isEqualTo("测试设备");
+        assertThat(result.getDeviceType()).isEqualTo("ESP32");
+        
+        // 验证方法调用
+        verify(deviceMapper).existsByDeviceName("测试设备");
+        verify(deviceMapper).insert(any(Device.class));
+    }
+    
+    @Test
+    void testCreateDevice_DeviceNameExists() {
+        // 准备测试数据
+        DeviceCreateRequest request = DeviceCreateRequest.builder()
+                .deviceName("已存在设备")
+                .deviceType("ESP32")
+                .build();
+        
+        // Mock方法调用
+        when(deviceMapper.existsByDeviceName("已存在设备")).thenReturn(true);
+        
+        // 执行测试并验证异常
+        BusinessException exception = assertThrows(BusinessException.class, 
+                () -> deviceService.createDevice(request));
+        
+        assertThat(exception.getMessage()).isEqualTo("设备名称已存在");
+        assertThat(exception.getCode()).isEqualTo("DEVICE_NAME_EXISTS");
+    }
+}
+```
+
+### 集成测试
+```java
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Transactional
+@Rollback
+class DeviceControllerIntegrationTest {
+    
+    @Autowired
+    private TestRestTemplate restTemplate;
+    
+    @Autowired
+    private DeviceMapper deviceMapper;
+    
+    @Test
+    void testCreateAndGetDevice() {
+        // 创建设备
+        DeviceCreateRequest createRequest = DeviceCreateRequest.builder()
+                .deviceName("集成测试设备")
+                .deviceType("ESP32")
+                .description("集成测试用设备")
+                .build();
+        
+        ResponseEntity<Result> createResponse = restTemplate.postForEntity(
+                "/api/v1/device", createRequest, Result.class);
+        
+        assertThat(createResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(createResponse.getBody().getCode()).isEqualTo(200);
+        
+        // 查询设备列表
+        ResponseEntity<Result> listResponse = restTemplate.getForEntity(
+                "/api/v1/device?page=1&size=10", Result.class);
+        
+        assertThat(listResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(listResponse.getBody().getCode()).isEqualTo(200);
+    }
+}
+```
+
+记住：代码质量、性能和安全性是Java开发的三大支柱。
+description:
+globs:
+alwaysApply: false
+---

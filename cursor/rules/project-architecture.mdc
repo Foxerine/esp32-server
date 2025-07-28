@@ -1,0 +1,55 @@
+# 小智ESP32服务器项目架构
+
+## 项目概述
+
+这是一个基于人机共生智能理论的ESP32后端服务系统，采用微服务架构，包含三个核心组件：
+
+- **Python后端服务** ([main/xiaozhi-server](mdc:main/xiaozhi-server)): 核心AI服务，处理语音识别、大模型对话、语音合成等
+- **Java管理API** ([main/manager-api](mdc:main/manager-api)): 基于Spring Boot的设备管理、用户管理、配置管理API  
+- **Vue管理界面** ([main/manager-web](mdc:main/manager-web)): 基于Vue.js 2.x和Element UI的Web管理控制台
+
+## 核心架构模式
+
+### 微服务架构
+- **服务独立**: 各组件独立开发、部署和扩展
+- **技术多样性**: 不同组件使用最适合的技术栈
+- **松耦合设计**: 通过API接口和消息队列通信
+
+### AI服务提供商模式
+- **统一基类**: 所有AI服务继承BaseProvider
+- **配置驱动**: 通过[config.yaml](mdc:main/xiaozhi-server/config.yaml)选择和配置提供商
+- **工厂模式**: 使用工厂模式创建提供商实例
+
+### 插件化架构
+- **插件自动加载**: 在[plugins_func/functions/](mdc:main/xiaozhi-server/plugins_func/functions/)目录下的.py文件自动注册
+- **统一接口**: 所有插件遵循相同的函数签名和文档字符串规范
+- **热插拔**: 支持运行时动态加载插件
+
+## 项目结构
+
+### Python后端服务 (xiaozhi-server)
+- **主入口**: [app.py](mdc:main/xiaozhi-server/app.py)
+- **配置管理**: [config/](mdc:main/xiaozhi-server/config/) 目录
+- **核心模块**: [core/](mdc:main/xiaozhi-server/core/) 目录
+- **AI提供商**: [core/providers/](mdc:main/xiaozhi-server/core/providers/) 目录
+- **插件系统**: [plugins_func/](mdc:main/xiaozhi-server/plugins_func/) 目录
+
+### Java管理API (manager-api)
+- **启动类**: [AdminApplication.java](mdc:main/manager-api/src/main/java/xiaozhi/AdminApplication.java)
+- **业务模块**: [modules/](mdc:main/manager-api/src/main/java/xiaozhi/modules/) 目录
+- **公共组件**: [common/](mdc:main/manager-api/src/main/java/xiaozhi/common/) 目录
+- **配置文件**: [application.yml](mdc:main/manager-api/src/main/resources/application.yml)
+
+### Vue管理界面 (manager-web)
+- **主入口**: [main.js](mdc:main/manager-web/src/main.js)
+- **根组件**: [App.vue](mdc:main/manager-web/src/App.vue)
+- **页面组件**: [views/](mdc:main/manager-web/src/views/) 目录
+- **公共组件**: [components/](mdc:main/manager-web/src/components/) 目录
+- **状态管理**: [store/](mdc:main/manager-web/src/store/) 目录
+- **API接口**: [apis/](mdc:main/manager-web/src/apis/) 目录
+
+记住：优先考虑系统的稳定性、可扩展性和可维护性。
+description:
+globs:
+alwaysApply: false
+---

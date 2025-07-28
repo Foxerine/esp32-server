@@ -1,0 +1,640 @@
+# 配置管理规范
+
+## 配置文件层次结构
+
+### 配置优先级（从高到低）
+1. **环境变量**: 系统环境变量覆盖
+2. **自定义配置**: [data/.config.yaml](mdc:main/xiaozhi-server/data/.config.yaml) (用户自定义)
+3. **API配置**: 从Java管理API动态获取
+4. **默认配置**: [config.yaml](mdc:main/xiaozhi-server/config.yaml) (项目根目录)
+
+### 配置文件示例
+
+#### 默认配置文件
+```yaml
+# config.yaml - 默认配置
+server:
+  ip: "0.0.0.0"
+  port: 8000
+  http_port: 8003
+  auth_key: "${AUTH_KEY:}"
+  
+# WebSocket配置
+websocket:
+  max_connections: 1000
+  heartbeat_interval: 30
+  message_timeout: 10
+
+# 数据库配置
+database:
+  redis:
+    host: "${REDIS_HOST:localhost}"
+    port: "${REDIS_PORT:6379}"
+    password: "${REDIS_PASSWORD:}"
+    database: 0
+    max_connections: 10
+
+# AI服务配置
+AI_PROVIDERS:
+  # 语音识别 (ASR)
+  ASR:
+    funasr:
+      model_dir: "models/FunASR"
+      output_dir: "tmp/asr_output"
+      batch_size: 1
+      device: "cpu"
+    
+    aliyun:
+      access_key_id: "${ALIYUN_ACCESS_KEY_ID:}"
+      access_key_secret: "${ALIYUN_ACCESS_KEY_SECRET:}"
+      region: "cn-shanghai"
+      model: "paraformer-realtime-v1"
+  
+  # 大语言模型 (LLM)
+  LLM:
+    openai:
+      api_key: "${OPENAI_API_KEY:}"
+      base_url: "${OPENAI_BASE_URL:https://api.openai.com/v1}"
+      model: "gpt-3.5-turbo"
+      max_tokens: 2048
+      temperature: 0.7
+      timeout: 30
+    
+    claude:
+      api_key: "${CLAUDE_API_KEY:}"
+      base_url: "${CLAUDE_BASE_URL:https://api.anthropic.com}"
+      model: "claude-3-sonnet-20240229"
+      max_tokens: 4096
+      temperature: 0.7
+  
+  # 语音合成 (TTS)
+  TTS:
+    aliyun:
+      access_key_id: "${ALIYUN_ACCESS_KEY_ID:}"
+      access_key_secret: "${ALIYUN_ACCESS_KEY_SECRET:}"
+      region: "cn-shanghai"
+      voice: "xiaoyun"
+      format: "wav"
+      sample_rate: 16000
+      output_dir: "tmp/tts_output"
+    
+    edge_tts:
+      voice: "zh-CN-XiaoyiNeural"
+      rate: "+0%"
+      volume: "+0%"
+      output_dir: "tmp/tts_output"
+
+# 模块选择配置
+selected_module:
+  ASR: "funasr"
+  LLM: "openai"
+  TTS: "aliyun"
+  VAD: "silero"
+  Intent: "intent_llm"
+  Memory: "mem_local_short"
+
+# 插件配置
+plugins:
+  enabled: true
+  auto_reload: true
+  max_execution_time: 30
+  allowed_modules:
+    - "requests"
+    - "json"
+    - "datetime"
+    - "re"
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  max_file_size: "10MB"
+  backup_count: 5
+  log_dir: "logs"
+
+# 缓存配置
+cache:
+  enabled: true
+  default_ttl: 300
+  max_size: 1000
+  strategies:
+    config: "memory"
+    ai_results: "redis"
+    user_sessions: "redis"
+
+# 性能监控配置
+monitoring:
+  enabled: true
+  metrics_interval: 60
+  health_check_interval: 30
+  performance_tracking: true
+```
+
+#### 自定义配置覆盖
+```yaml
+# data/.config.yaml - 用户自定义配置
+server:
+  port: 8001  # 覆盖默认端口
+
+selected_module:
+  LLM: "claude"  # 切换到Claude模型
+  TTS: "edge_tts"  # 使用Edge TTS
+
+AI_PROVIDERS:
+  LLM:
+    claude:
+      api_key: "your_claude_api_key"
+      model: "claude-3-opus-20240229"
+      max_tokens: 8192
+
+logging:
+  level: "DEBUG"  # 开发时使用DEBUG级别
+```
+
+## Java配置管理
+
+### Spring Boot配置文件
+```yaml
+# application.yml
+server:
+  port: 8002
+  servlet:
+    context-path: /xiaozhi
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  
+  # 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:xiaozhi}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:password}
+    
+    # 连接池配置
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+  
+  # Redis配置
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DATABASE:0}
+    timeout: 5000
+    jedis:
+      pool:
+        max-active: 8
+        max-wait: -1
+        max-idle: 8
+        min-idle: 0
+  
+  # 国际化配置
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+    cache-duration: 3600
+  
+  # Jackson配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+
+# MyBatis配置
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: xiaozhi.common.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: true
+    lazy-loading-enabled: true
+
+# 应用自定义配置
+app:
+  # JWT配置
+  jwt:
+    secret: ${JWT_SECRET:xiaozhi-jwt-secret-key-2024}
+    expiration: ${JWT_EXPIRATION:86400}
+    header: Authorization
+    prefix: "Bearer "
+  
+  # 文件上传配置
+  upload:
+    path: ${UPLOAD_PATH:./uploads}
+    max-file-size: ${MAX_FILE_SIZE:10MB}
+    allowed-types: 
+      - "image/jpeg"
+      - "image/png"
+      - "image/gif"
+      - "application/pdf"
+  
+  # 缓存配置
+  cache:
+    enabled: ${CACHE_ENABLED:true}
+    default-ttl: ${CACHE_TTL:1800}
+    
+  # API配置
+  api:
+    rate-limit:
+      enabled: true
+      requests-per-minute: 60
+    cors:
+      allowed-origins: 
+        - "http://localhost:8080"
+        - "http://localhost:3000"
+      allowed-methods: 
+        - "GET"
+        - "POST" 
+        - "PUT"
+        - "DELETE"
+      allowed-headers: "*"
+
+# 日志配置
+logging:
+  level:
+    xiaozhi: ${LOG_LEVEL:INFO}
+    org.springframework.web: WARN
+    org.mybatis: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/xiaozhi-api.log
+    max-size: 100MB
+    max-history: 30
+
+# 管理端点配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+```
+
+### 环境特定配置
+```yaml
+# application-dev.yml - 开发环境
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/xiaozhi_dev
+    username: dev_user
+    password: dev_password
+  
+  # 开发环境使用H2控制台
+  h2:
+    console:
+      enabled: true
+      
+logging:
+  level:
+    xiaozhi: DEBUG
+    org.springframework.web: DEBUG
+
+app:
+  cors:
+    allowed-origins: "*"
+```
+
+```yaml
+# application-prod.yml - 生产环境
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+
+logging:
+  level:
+    xiaozhi: WARN
+    org.springframework.web: ERROR
+
+app:
+  cors:
+    allowed-origins:
+      - "https://yourdomain.com"
+```
+
+## Vue配置管理
+
+### Vue CLI配置
+```javascript
+// vue.config.js
+const { defineConfig } = require('@vue/cli-service')
+
+module.exports = defineConfig({
+  transpileDependencies: true,
+  
+  // 开发服务器配置
+  devServer: {
+    port: process.env.VUE_APP_PORT || 8080,
+    host: '0.0.0.0',
+    proxy: {
+      '/api': {
+        target: process.env.VUE_APP_API_BASE_URL || 'http://localhost:8002',
+        changeOrigin: true,
+        ws: true,
+        pathRewrite: {
+          '^/api': '/xiaozhi/api'
+        }
+      }
+    },
+    overlay: {
+      warnings: false,
+      errors: true
+    }
+  },
+  
+  // 构建配置
+  configureWebpack: {
+    resolve: {
+      alias: {
+        '@': require('path').resolve(__dirname, 'src'),
+        'vue$': 'vue/dist/vue.esm.js'
+      }
+    },
+    externals: process.env.NODE_ENV === 'production' ? {
+      'vue': 'Vue',
+      'vue-router': 'VueRouter',
+      'vuex': 'Vuex',
+      'axios': 'axios',
+      'element-ui': 'ELEMENT'
+    } : {}
+  },
+  
+  // 生产环境优化
+  productionSourceMap: false,
+  
+  // CSS配置
+  css: {
+    loaderOptions: {
+      scss: {
+        additionalData: `
+          @import "@/assets/styles/variables.scss";
+          @import "@/assets/styles/mixins.scss";
+        `
+      }
+    }
+  },
+  
+  // PWA配置
+  pwa: {
+    name: '小智管理平台',
+    themeColor: '#409EFF',
+    msTileColor: '#000000',
+    appleMobileWebAppCapable: 'yes',
+    appleMobileWebAppStatusBarStyle: 'black',
+    workboxOptions: {
+      skipWaiting: true,
+      clientsClaim: true
+    }
+  }
+})
+```
+
+### 环境配置文件
+```javascript
+// .env.development
+NODE_ENV=development
+VUE_APP_API_BASE_URL=http://localhost:8002/xiaozhi/api
+VUE_APP_WS_URL=ws://localhost:8000
+VUE_APP_TITLE=小智管理平台 - 开发环境
+VUE_APP_DEBUG=true
+
+// .env.production
+NODE_ENV=production
+VUE_APP_API_BASE_URL=/api
+VUE_APP_WS_URL=wss://yourdomain.com/ws
+VUE_APP_TITLE=小智管理平台
+VUE_APP_DEBUG=false
+
+// .env.local (本地开发覆盖)
+VUE_APP_API_BASE_URL=http://192.168.1.100:8002/xiaozhi/api
+VUE_APP_MOCK_ENABLED=true
+```
+
+## 配置管理最佳实践
+
+### 1. 敏感信息处理
+```yaml
+# 使用环境变量替换敏感信息
+database:
+  password: "${DB_PASSWORD:}"  # 必须通过环境变量提供
+  
+api_keys:
+  openai: "${OPENAI_API_KEY:}"  # 不要在配置文件中硬编码API密钥
+```
+
+### 2. 配置验证
+```python
+# Python配置验证
+from typing import Dict, Any
+from pydantic import BaseModel, validator
+
+class ServerConfig(BaseModel):
+    ip: str = "0.0.0.0"
+    port: int = 8000
+    auth_key: str
+    
+    @validator('port')
+    def validate_port(cls, v):
+        if not (1 <= v <= 65535):
+            raise ValueError('端口号必须在1-65535之间')
+        return v
+    
+    @validator('auth_key')
+    def validate_auth_key(cls, v):
+        if not v or len(v) < 8:
+            raise ValueError('认证密钥不能为空且长度至少8位')
+        return v
+
+def validate_config(config: Dict[str, Any]) -> ServerConfig:
+    """验证配置文件"""
+    try:
+        return ServerConfig(**config['server'])
+    except Exception as e:
+        raise ConfigException(f"配置验证失败: {e}")
+```
+
+### 3. 配置热重载
+```python
+# Python配置热重载
+import asyncio
+import yaml
+from pathlib import Path
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+class ConfigReloadHandler(FileSystemEventHandler):
+    def __init__(self, config_manager):
+        self.config_manager = config_manager
+    
+    def on_modified(self, event):
+        if event.src_path.endswith('.yaml') or event.src_path.endswith('.yml'):
+            asyncio.create_task(self.config_manager.reload_config())
+
+class ConfigManager:
+    def __init__(self):
+        self.config = {}
+        self.observers = []
+    
+    async def start_watching(self):
+        """开始监听配置文件变化"""
+        handler = ConfigReloadHandler(self)
+        observer = Observer()
+        observer.schedule(handler, ".", recursive=True)
+        observer.start()
+        self.observers.append(observer)
+    
+    async def reload_config(self):
+        """重新加载配置"""
+        try:
+            new_config = self.load_config()
+            self.config.update(new_config)
+            await self.notify_config_change()
+            logger.info("配置重新加载成功")
+        except Exception as e:
+            logger.error(f"配置重新加载失败: {e}")
+    
+    async def notify_config_change(self):
+        """通知配置变更"""
+        # 通知各个组件配置已更新
+        pass
+```
+
+### 4. 配置模板和生成
+```bash
+#!/bin/bash
+# generate-config.sh - 配置生成脚本
+
+# 检查必需的环境变量
+required_vars=("DB_PASSWORD" "OPENAI_API_KEY" "JWT_SECRET")
+for var in "${required_vars[@]}"; do
+    if [ -z "${!var}" ]; then
+        echo "错误: 环境变量 $var 未设置"
+        exit 1
+    fi
+done
+
+# 生成配置文件
+envsubst < config.template.yaml > config.yaml
+echo "配置文件生成完成: config.yaml"
+
+# 验证配置文件
+python -c "
+import yaml
+try:
+    with open('config.yaml', 'r') as f:
+        config = yaml.safe_load(f)
+    print('配置文件验证通过')
+except Exception as e:
+    print(f'配置文件验证失败: {e}')
+    exit(1)
+"
+```
+
+### 5. 配置文档生成
+```python
+# config_docs.py - 配置文档生成器
+def generate_config_docs():
+    """生成配置文档"""
+    docs = {
+        "server": {
+            "description": "服务器配置",
+            "fields": {
+                "ip": {"type": "string", "default": "0.0.0.0", "desc": "监听IP地址"},
+                "port": {"type": "int", "default": 8000, "desc": "监听端口"}
+            }
+        },
+        "AI_PROVIDERS": {
+            "description": "AI服务提供商配置",
+            "fields": {
+                "ASR": {"type": "object", "desc": "语音识别服务配置"},
+                "LLM": {"type": "object", "desc": "大语言模型配置"}
+            }
+        }
+    }
+    
+    # 生成Markdown文档
+    with open("CONFIG.md", "w", encoding="utf-8") as f:
+        f.write("# 配置文件说明\n\n")
+        for section, info in docs.items():
+            f.write(f"## {section}\n\n")
+            f.write(f"{info['description']}\n\n")
+            for field, field_info in info['fields'].items():
+                f.write(f"- **{field}** ({field_info['type']}): {field_info['desc']}\n")
+            f.write("\n")
+
+if __name__ == "__main__":
+    generate_config_docs()
+```
+
+## 部署配置
+
+### Docker环境配置
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  xiaozhi-server:
+    build: .
+    environment:
+      - REDIS_HOST=redis
+      - DB_HOST=mysql
+      - DB_PASSWORD=${DB_PASSWORD}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - mysql
+```
+
+### Kubernetes配置
+```yaml
+# configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xiaozhi-config
+data:
+  config.yaml: |
+    server:
+      ip: "0.0.0.0"
+      port: 8000
+    database:
+      redis:
+        host: "redis-service"
+        port: 6379
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: xiaozhi-secrets
+type: Opaque
+data:
+  db-password: <base64-encoded-password>
+  api-key: <base64-encoded-key>
+```
+
+记住：配置管理的核心是安全性、可维护性和环境隔离。
+description:
+globs:
+alwaysApply: false
+---

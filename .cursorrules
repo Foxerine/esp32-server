@@ -1,0 +1,333 @@
+# 小智ESP32服务器项目 Cursor Rules
+
+## 项目概述
+
+这是一个基于人机共生智能理论的ESP32后端服务系统，采用微服务架构，包含：
+- **Python后端服务** (xiaozhi-server): 核心AI服务，处理语音识别、大模型对话、语音合成等
+- **Java管理API** (manager-api): 基于Spring Boot的设备管理、用户管理、配置管理API
+- **Vue管理界面** (manager-web): 基于Vue.js 2.x和Element UI的Web管理控制台
+
+## 技术栈
+
+### Python后端服务 (xiaozhi-server)
+- **主要框架**: FastAPI + WebSocket + asyncio
+- **AI服务**: ASR、LLM、TTS、VAD、VLLM、Intent、Memory
+- **工具调用**: IoT控制、MCP协议、自定义插件系统
+- **缓存**: Redis
+- **配置**: YAML + 动态配置管理
+
+### Java管理API (manager-api)
+- **框架**: Spring Boot 2.x
+- **安全**: Spring Security + JWT
+- **数据访问**: MyBatis + MySQL
+- **缓存**: Redis
+- **API文档**: Swagger
+- **国际化**: i18n支持
+
+### Vue前端界面 (manager-web)
+- **框架**: Vue.js 2.6+
+- **UI组件**: Element UI 2.15+
+- **状态管理**: Vuex
+- **路由**: Vue Router
+- **HTTP客户端**: Axios
+- **构建工具**: Webpack
+
+## 开发规范
+
+### Python代码规范
+- **严格遵循PEP 8规范**
+- **必须使用类型注解**，例如：
+  ```python
+  async def process_data(self, data: str) -> Optional[str]:
+      """处理数据并返回结果"""
+      pass
+  ```
+- **所有函数和类必须有详细的文档字符串**
+- **使用异步编程模式**，优先使用async/await
+- **异常处理**: 使用自定义异常类，统一错误处理机制
+- **导入顺序**: 标准库 -> 第三方库 -> 本地模块
+
+### Java代码规范
+- **遵循阿里巴巴Java开发手册**
+- **使用Lombok简化代码**，减少样板代码
+- **Controller层**: 使用@RestController，统一返回Result<T>格式
+- **Service层**: 使用@Transactional注解管理事务
+- **异常处理**: 使用@RestControllerAdvice统一处理异常
+- **API文档**: 使用Swagger注解完善API文档
+- **命名规范**: 类名PascalCase，方法名camelCase
+
+### Vue代码规范
+- **遵循Vue官方风格指南**
+- **组件命名**: 使用PascalCase，例如DeviceManagement.vue
+- **方法命名**: 使用camelCase，例如handleClick
+- **使用ESLint + Prettier进行代码格式化**
+- **状态管理**: 合理使用Vuex，按模块划分状态
+- **组件设计**: 单一职责原则，合理使用props和events
+
+### 提交规范
+使用Conventional Commits规范：
+```
+<type>[optional scope]: <description>
+
+类型说明：
+- feat: 新功能
+- fix: 修复bug  
+- docs: 文档更新
+- style: 代码格式调整
+- refactor: 重构
+- test: 测试相关
+- chore: 构建过程或辅助工具的变动
+```
+
+## 架构模式和设计原则
+
+### 微服务架构
+- **服务独立**: 各组件独立开发、部署和扩展
+- **技术多样性**: 不同组件使用最适合的技术栈
+- **松耦合设计**: 通过API接口和消息队列通信
+
+### 分层架构
+```
+Controller Layer (控制器层)
+    ↓
+Service Layer (服务层)  
+    ↓
+DAO Layer (数据访问层)
+    ↓
+Database (数据库)
+```
+
+### 插件化架构
+- **插件自动加载**: 在plugins_func/functions/目录下的.py文件自动注册
+- **统一接口**: 所有插件遵循相同的函数签名和文档字符串规范
+- **热插拔**: 支持运行时动态加载插件
+
+### AI服务提供商模式
+- **统一基类**: 所有AI服务继承BaseProvider
+- **配置驱动**: 通过config.yaml选择和配置提供商
+- **工厂模式**: 使用工厂模式创建提供商实例
+
+## 开发最佳实践
+
+### 异步编程 (Python)
+```python
+# 正确的异步编程模式
+async def process_request(self, data: dict) -> dict:
+    # 并发处理多个任务
+    asr_task = asyncio.create_task(self.asr.recognize(data["audio"]))
+    intent_task = asyncio.create_task(self.intent.analyze(data["text"]))
+    
+    asr_result, intent_result = await asyncio.gather(asr_task, intent_task)
+    return {"asr": asr_result, "intent": intent_result}
+```
+
+### 错误处理
+```python
+# Python异常处理
+try:
+    result = await self.process_data(data)
+    return success_response(result)
+except ConfigException as e:
+    logger.error(f"配置错误: {e.message}")
+    return error_response(e.message, e.error_code)
+except Exception as e:
+    logger.error(f"未知错误: {e}")
+    return error_response("内部服务器错误")
+```
+
+```java
+// Java异常处理
+@ExceptionHandler(BusinessException.class)
+public ResponseEntity<Result<String>> handleBusinessException(BusinessException e) {
+    log.error("业务异常: {}", e.getMessage());
+    return ResponseEntity.ok(Result.error(e.getCode(), e.getMessage()));
+}
+```
+
+### 缓存策略
+- **配置缓存**: 使用CacheManager管理配置信息
+- **数据缓存**: 合理使用Redis缓存热点数据
+- **缓存过期**: 设置合适的TTL避免内存泄漏
+
+### 日志记录
+```python
+# 结构化日志
+logger.info("处理请求", extra={
+    "user_id": user_id,
+    "request_type": "audio_processing",
+    "duration": duration_ms
+})
+```
+
+## 扩展开发指南
+
+### 添加新的AI服务提供商
+1. 在对应目录创建新类，继承Base类
+2. 实现必要的抽象方法
+3. 在config.yaml中添加配置项
+4. 更新selected_module配置
+
+### 添加新的插件功能
+1. 在plugins_func/functions/目录创建.py文件
+2. 定义函数并添加详细的docstring
+3. 函数会自动被插件加载器发现和注册
+
+### 添加新的API接口
+```python
+# Python API
+class NewHandler(BaseHandler):
+    async def handle_get(self, request):
+        # 实现GET处理逻辑
+        pass
+```
+
+```java
+// Java API
+@RestController
+@RequestMapping("/api/v1/new")
+@Api(tags = "新功能管理")
+public class NewController {
+    @GetMapping
+    @ApiOperation("获取列表")
+    public ResponseEntity<Result<List<NewDTO>>> getList() {
+        // 实现逻辑
+    }
+}
+```
+
+## 配置管理
+
+### 配置文件层次
+1. **默认配置**: config.yaml (项目根目录)
+2. **自定义配置**: data/.config.yaml (用户自定义)
+3. **API配置**: 从Java管理API动态获取
+4. **环境变量**: 支持环境变量覆盖
+
+### 配置热更新
+支持运行时重新加载配置，无需重启服务
+
+## 数据库规范
+
+### 表命名规范
+- 使用下划线命名法，例如: device_info, user_config
+- 表名使用复数形式
+
+### 字段命名规范
+- 主键统一使用id
+- 时间字段使用create_time, update_time
+- 状态字段使用枚举类型
+
+### 索引规范
+- 主键和外键自动创建索引
+- 查询条件字段创建普通索引
+- 复合查询创建复合索引
+
+## 测试策略
+
+### 单元测试
+```python
+# Python测试
+@pytest.mark.asyncio
+async def test_asr_recognition():
+    asr = FunASR(test_config)
+    result = await asr.recognize(test_audio_data)
+    assert result is not None
+```
+
+```java
+// Java测试
+@Test
+void testCreateDevice() {
+    DeviceCreateRequest request = new DeviceCreateRequest();
+    request.setDeviceName("测试设备");
+    
+    DeviceDTO result = deviceService.create(request);
+    assertNotNull(result);
+}
+```
+
+### 集成测试
+- 测试API接口的完整流程
+- 测试数据库事务处理
+- 测试WebSocket连接和消息处理
+
+## 部署和运维
+
+### 开发环境
+```bash
+# Python服务
+cd main/xiaozhi-server
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python app.py
+
+# Java服务  
+cd main/manager-api
+mvn spring-boot:run
+
+# Vue服务
+cd main/manager-web
+npm install
+npm run serve
+```
+
+### 生产环境
+- **容器化部署**: 使用Docker和Docker Compose
+- **反向代理**: 使用Nginx进行负载均衡
+- **SSL证书**: 配置HTTPS安全访问
+- **监控告警**: 配置系统监控和异常告警
+
+### 性能优化
+- **异步处理**: Python服务使用异步编程
+- **连接池**: 数据库和Redis连接池配置
+- **缓存策略**: 合理使用内存缓存和Redis缓存
+- **静态资源**: CDN加速静态资源
+
+## 安全规范
+
+### 认证授权
+- **JWT Token**: 使用JWT进行用户认证
+- **权限控制**: 基于角色的访问控制(RBAC)
+- **API安全**: 所有API接口需要权限验证
+
+### 数据安全
+- **敏感数据加密**: 密码等敏感信息加密存储
+- **HTTPS传输**: 生产环境强制使用HTTPS
+- **输入验证**: 严格验证所有输入参数
+
+### XSS防护
+- **输出编码**: 前端显示数据时进行HTML编码
+- **CSP策略**: 配置内容安全策略
+
+## 常见问题处理
+
+### Python服务问题
+- **内存泄漏**: 检查异步任务是否正确清理，使用性能监控
+- **依赖冲突**: 使用虚拟环境隔离依赖
+- **配置错误**: 检查config.yaml格式和必要字段
+
+### Java服务问题  
+- **数据库连接**: 检查连接池配置和数据库状态
+- **内存溢出**: 调整JVM堆内存参数
+- **事务问题**: 确保@Transactional注解正确使用
+
+### Vue前端问题
+- **跨域问题**: 检查proxy配置或CORS设置
+- **路由问题**: 确保路由配置和权限验证正确
+- **状态管理**: 避免直接修改state，使用mutations
+
+## 工具和IDE配置
+
+### 推荐工具
+- **IDE**: PyCharm (Python), IntelliJ IDEA (Java), VS Code (Vue)
+- **API测试**: Postman或Insomnia
+- **数据库管理**: Navicat或DBeaver
+- **版本控制**: Git + GitLab/GitHub
+
+### 代码质量
+- **Python**: flake8, black, mypy
+- **Java**: CheckStyle, SpotBugs
+- **Vue**: ESLint, Prettier
+
+记住：保持代码简洁、可读、可维护。优先考虑系统的稳定性和安全性。 
