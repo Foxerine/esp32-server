@@ -175,9 +175,11 @@ uploadfile
 *.json
 .vscode
 .cursor
- 
+
 !package.json
 !**/package.json
+*.lock
+main/xiaozhi-server/libopus.dll
 
 # Do not ignore env and json files inside manager-mobile
 !main/manager-mobile/**/env/

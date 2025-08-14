@@ -43,6 +43,14 @@ async def handleTextMessage(conn, message):
                 if len(conn.asr_audio) > 0:
                     await handleAudioMessage(conn, b"")
             elif msg_json["state"] == "detect":
+                """
+                {
+                    "session_id": "<会话ID>",
+                    "type": "listen",
+                    "state": "detect",
+                    "text": "<唤醒词>"
+                }
+                """
                 conn.client_have_voice = False
                 conn.asr_audio.clear()
                 if "text" in msg_json:
