@@ -10,6 +10,8 @@ import threading
 import traceback
 import subprocess
 import websockets
+from loguru import logger as l
+
 from core.utils.util import (
     extract_json_from_string,
     check_vad_update,
@@ -666,6 +668,9 @@ class ConnectionHandler:
 
     def chat(self, query, tool_call=False, depth=0):
         self.logger.bind(tag=TAG).info(f"大模型收到用户消息: {query}")
+
+        l.debug(f"[OpenAI接口]：完整历史记录：{str(self.dialogue)}")
+
         self.llm_finish_task = False
 
         if not tool_call:
