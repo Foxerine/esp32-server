@@ -727,21 +727,22 @@ class ConnectionHandler:
         function_arguments = ""
         content_arguments = ""
         self.client_abort = False
+
+        # 用于跟踪括号状态
+        in_brackets = False  # 标记是否在括号内
+        bracket_content = ""  # 记录括号内的内容用于日志
+
         async for response in llm_responses_generator:
             if self.client_abort:
                 break
+
             if self.intent_type == "function_call" and functions is not None:
                 content, tools_call = response
                 if "content" in response:
                     content = response["content"]
                     tools_call = None
-                if content is not None and len(content) > 0:
-                    content_arguments += content
 
-                if not tool_call_flag and content_arguments.startswith("<tool_call>"):
-                    # print("content_arguments", content_arguments)
-                    tool_call_flag = True
-
+                # 处理tool call情况
                 if tools_call is not None and len(tools_call) > 0:
                     tool_call_flag = True
                     if tools_call[0].id is not None:
@@ -750,8 +751,87 @@ class ConnectionHandler:
                         function_name = tools_call[0].function.name
                     if tools_call[0].function.arguments is not None:
                         function_arguments += tools_call[0].function.arguments
+                    continue  # 如果是工具调用，直接处理下一个响应
+
+                # 检查content是否为None
+                if content is None:
+                    continue
+
+                # 处理括号内容
+                i = 0
+                skip_this_chunk = False
+                while i < len(content):
+                    char = content[i]
+
+                    if not in_brackets and (char == '(' or char == '（'):
+                        # 进入括号
+                        in_brackets = True
+                        bracket_content = char
+                        skip_this_chunk = True
+                    elif in_brackets and (char == ')' or char == '）'):
+                        # 退出括号
+                        in_brackets = False
+                        bracket_content += char
+                        # 记录被过滤的内容
+                        self.logger.bind(tag=TAG).info(
+                            f"过滤掉括号内容: {bracket_content}"
+                        )
+                        bracket_content = ""  # 重置括号内容
+                        skip_this_chunk = True
+                    elif in_brackets:
+                        # 在括号内，将内容加到bracket_content
+                        bracket_content += char
+                        skip_this_chunk = True
+
+                    i += 1
+
+                # 如果需要跳过这个块，则不添加到content_arguments
+                if skip_this_chunk:
+                    continue
+
+                # 非括号内容，正常添加
+                content_arguments += content
+
+                if not tool_call_flag and content_arguments.startswith("<tool_call>"):
+                    tool_call_flag = True
             else:
                 content = response
+
+                # 检查content是否为None
+                if content is None:
+                    continue
+
+                # 处理非tool call情况下的括号内容
+                i = 0
+                skip_this_chunk = False
+                while i < len(content):
+                    char = content[i]
+
+                    if not in_brackets and (char == '(' or char == '（'):
+                        # 进入括号
+                        in_brackets = True
+                        bracket_content = char
+                        skip_this_chunk = True
+                    elif in_brackets and (char == ')' or char == '）'):
+                        # 退出括号
+                        in_brackets = False
+                        bracket_content += char
+                        # 记录被过滤的内容
+                        self.logger.bind(tag=TAG).info(
+                            f"过滤掉括号内容: {bracket_content}"
+                        )
+                        bracket_content = ""  # 重置括号内容
+                        skip_this_chunk = True
+                    elif in_brackets:
+                        # 在括号内，将内容加到bracket_content
+                        bracket_content += char
+                        skip_this_chunk = True
+
+                    i += 1
+
+                # 如果需要跳过这个块，则不添加
+                if skip_this_chunk:
+                    continue
 
             if content is not None and len(content) > 0:
                 if not tool_call_flag:
