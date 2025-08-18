@@ -57,6 +57,9 @@ public class AgentEntity {
     @Schema(description = "角色设定参数")
     private String systemPrompt;
 
+    @Schema(description = "回答风格", example = "你应该以简短，口语化的方式回答用户的问题，绝对不可以使用任何Markdown格式", nullable = true)
+    private String reply_style;
+
     @Schema(description = "总结记忆", example = "构建可生长的动态记忆网络，在有限空间内保留关键信息的同时，智能维护信息演变轨迹\n" +
             "根据对话记录，总结user的重要信息，以便在未来的对话中提供更个性化的服务", required = false)
     private String summaryMemory;

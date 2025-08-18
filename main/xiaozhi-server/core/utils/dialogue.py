@@ -25,11 +25,7 @@ class Message:
         """
         parts = [f"ID: {self.uniq_id}", f"Role: {self.role}"]
         if self.content:
-            # 限制内容长度以避免日志过长
-            display_content = self.content
-            if len(display_content) > 100:
-                display_content = display_content[:97] + "..."
-            parts.append(f"Content: '{display_content}'")
+            parts.append(f"Content: '{self.content}'")
         if self.tool_calls:
             # 简化 tool_calls 的显示
             tool_names = [tc.get('function', {}).get('name', 'unknown') for tc in self.tool_calls]

@@ -81,6 +81,7 @@ public class ConfigServiceImpl implements ConfigService {
                 null,
                 null,
                 null,
+                null,
                 agent.getVadModelId(),
                 agent.getAsrModelId(),
                 null,
@@ -176,6 +177,7 @@ public class ConfigServiceImpl implements ConfigService {
         buildModuleConfig(
                 agent.getAgentName(),
                 agent.getSystemPrompt(),
+                agent.getReply_style(),
                 agent.getSummaryMemory(),
                 voice,
                 referenceAudio,
@@ -338,6 +340,7 @@ public class ConfigServiceImpl implements ConfigService {
     private void buildModuleConfig(
             String assistantName,
             String prompt,
+            String reply_style,
             String summaryMemory,
             String voice,
             String referenceAudio,
@@ -433,6 +436,7 @@ public class ConfigServiceImpl implements ConfigService {
             prompt = prompt.replace("{{assistant_name}}", StringUtils.isBlank(assistantName) ? "小智" : assistantName);
         }
         result.put("prompt", prompt);
+        result.put("reply_style", reply_style);
         result.put("summaryMemory", summaryMemory);
     }
 }

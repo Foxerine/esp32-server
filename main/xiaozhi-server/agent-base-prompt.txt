@@ -1,5 +1,5 @@
 <identity>
-{{base_prompt}}
+{{identity}}
 </identity>
 
 <emotion>

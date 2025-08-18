@@ -161,7 +161,7 @@ class ConnectionHandler:
         self.features = None
 
         # 初始化提示词管理器
-        self.prompt_manager = PromptManager(config, self.logger)
+        self.prompt_manager = PromptManager(self.config, self.logger)
 
     async def handle_connection(self, ws):
         try:
@@ -344,15 +344,15 @@ class ConnectionHandler:
             )
             self.logger = create_connection_logger(self.selected_module_str)
 
-            """初始化组件"""
-            if self.config.get("prompt") is not None:
-                user_prompt = self.config["prompt"]
-                # 使用快速提示词进行初始化
-                prompt = self.prompt_manager.get_quick_prompt(user_prompt)
-                self.change_system_prompt(prompt)
-                self.logger.bind(tag=TAG).info(
-                    f"快速初始化组件: prompt成功 {prompt[:50]}..."
-                )
+            # """初始化组件"""
+            # if self.config.get("prompt") is not None:
+            #     user_prompt = self.config["prompt"]
+            #     # 使用快速提示词进行初始化
+            #     prompt = self.prompt_manager.get_quick_prompt(user_prompt)
+            #     self.change_system_prompt(prompt)
+            #     self.logger.bind(tag=TAG).info(
+            #         f"快速初始化组件: prompt成功 {prompt[:50]}..."
+            #     )
 
             """初始化本地组件"""
             if self.vad is None:
@@ -390,11 +390,11 @@ class ConnectionHandler:
         # 更新上下文信息
         self.prompt_manager.update_context_info(self, self.client_ip)
         enhanced_prompt = self.prompt_manager.build_enhanced_prompt(
-            self.config["prompt"], self.device_id, self.client_ip
+            self.config["prompt"], self.device_id, self.client_ip, self.config["reply_style"]
         )
         if enhanced_prompt:
             self.change_system_prompt(enhanced_prompt)
-            self.logger.bind(tag=TAG).info("系统提示词已增强更新")
+            self.logger.bind(tag=TAG).info(f"系统提示词已增强更新，内容：{enhanced_prompt[:20] + '...' + enhanced_prompt[-20:]}")
 
     def _init_report_threads(self):
         """初始化ASR和TTS上报线程"""
@@ -532,6 +532,8 @@ class ConnectionHandler:
                 ] = plugin_from_server.keys()
         if private_config.get("prompt", None) is not None:
             self.config["prompt"] = private_config["prompt"]
+        if private_config.get("reply_style", None) is not None:
+            self.config["reply_style"] = private_config["reply_style"]
         # 获取声纹信息
         if private_config.get("voiceprint", None) is not None:
             self.config["voiceprint"] = private_config["voiceprint"]
@@ -668,8 +670,7 @@ class ConnectionHandler:
 
     def chat(self, query, tool_call=False, depth=0):
         self.logger.bind(tag=TAG).info(f"大模型收到用户消息: {query}")
-
-        l.debug(f"[OpenAI接口]：完整历史记录：{str(self.dialogue)}")
+        self.logger.bind(tag=TAG).info(f"完整历史记录：{str(self.dialogue)}")
 
         self.llm_finish_task = False
 

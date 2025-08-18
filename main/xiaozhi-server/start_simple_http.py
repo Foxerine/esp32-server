@@ -5,6 +5,8 @@ import os
 PORT = 8005  # 你可以修改端口号
 DIRECTORY = "./test"  # 指定要对外服务的目录
 
+print(f"当前工作目录：{os.getcwd()}")
+
 class MyHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         # 更改当前工作目录到指定目录

@@ -21,38 +21,12 @@ WEEKDAY_MAP = {
     "Sunday": "星期日",
 }
 
-EMOJI_List = [
-    "😶",
-    "🙂",
-    "😆",
-    "😂",
-    "😔",
-    "😠",
-    "😭",
-    "😍",
-    "😳",
-    "😲",
-    "😱",
-    "🤔",
-    "😉",
-    "😎",
-    "😌",
-    "🤤",
-    "😘",
-    "😏",
-    "😴",
-    "😜",
-    "🙄",
-]
-
-
 class PromptManager:
     """系统提示词管理器，负责管理和更新系统提示词"""
 
     def __init__(self, config: Dict[str, Any], logger=None):
         self.config = config
         self.logger = logger or setup_logging()
-        self.base_prompt_template = None
         self.last_update_time = 0
 
         # 导入全局缓存管理器
@@ -60,37 +34,6 @@ class PromptManager:
 
         self.cache_manager = cache_manager
         self.CacheType = CacheType
-
-        self._load_base_template()
-
-    def _load_base_template(self):
-        """加载基础提示词模板"""
-        try:
-            template_path = "agent-base-prompt.txt"
-            cache_key = f"prompt_template:{template_path}"
-
-            # 先从缓存获取
-            cached_template = self.cache_manager.get(self.CacheType.CONFIG, cache_key)
-            if cached_template is not None:
-                self.base_prompt_template = cached_template
-                self.logger.bind(tag=TAG).debug("从缓存加载基础提示词模板")
-                return
-
-            # 缓存未命中，从文件读取
-            if os.path.exists(template_path):
-                with open(template_path, "r", encoding="utf-8") as f:
-                    template_content = f.read()
-
-                # 存入缓存（CONFIG类型默认不自动过期，需要手动失效）
-                self.cache_manager.set(
-                    self.CacheType.CONFIG, cache_key, template_content
-                )
-                self.base_prompt_template = template_content
-                self.logger.bind(tag=TAG).debug("成功加载基础提示词模板并缓存")
-            else:
-                self.logger.bind(tag=TAG).warning("未找到agent-base-prompt.txt文件")
-        except Exception as e:
-            self.logger.bind(tag=TAG).error(f"加载提示词模板失败: {e}")
 
     def get_quick_prompt(self, user_prompt: str, device_id: str = None) -> str:
         """快速获取系统提示词（使用用户配置）"""
@@ -190,10 +133,10 @@ class PromptManager:
             self.logger.bind(tag=TAG).error(f"更新上下文信息失败: {e}")
 
     def build_enhanced_prompt(
-        self, user_prompt: str, device_id: str, client_ip: str = None
+        self, user_prompt: str, device_id: str, client_ip: str = None, reply_style: str = None
     ) -> str:
         """构建增强的系统提示词"""
-        if not self.base_prompt_template:
+        if not reply_style:
             return user_prompt
 
         try:
@@ -220,23 +163,22 @@ class PromptManager:
                     )
 
             # 替换模板变量
-            template = Template(self.base_prompt_template)
+            template = Template(reply_style)
             enhanced_prompt = template.render(
-                base_prompt=user_prompt,
+                identity=user_prompt,
                 current_time="{{current_time}}",
                 today_date=today_date,
                 today_weekday=today_weekday,
                 lunar_date=lunar_date,
                 local_address=local_address,
-                weather_info=weather_info,
-                emojiList=EMOJI_List,
+                weather_info=weather_info
             )
             device_cache_key = f"device_prompt:{device_id}"
             self.cache_manager.set(
                 self.CacheType.DEVICE_PROMPT, device_cache_key, enhanced_prompt
             )
             self.logger.bind(tag=TAG).info(
-                f"构建增强提示词成功，长度: {len(enhanced_prompt)}"
+                f"构建增强提示词成功，长度: {len(enhanced_prompt)}，内容: {enhanced_prompt}"
             )
             return enhanced_prompt
 
