@@ -37,7 +37,7 @@
                       <el-input v-model="form.agentName" class="form-input" maxlength="10" />
                     </el-form-item>
                     <el-form-item label="角色模版：">
-         z             <div class="template-container">
+                      <div class="template-container">
                         <div v-for="(template, index) in templates" :key="`template-${index}`" class="template-item"
                           :class="{ 'template-loading': loadingTemplate }" @click="selectTemplate(template)">
                           {{ template.agentName }}
@@ -54,7 +54,7 @@
                     </el-form-item>
                     <!-- ============== 重构后的用法说明部分（中文版） ============== -->
                     <el-form-item label=" ">
-                      <div style="display: flex; gap: 10px;">
+                      <div style="display: flex; gap: 10px; text-align: left;">
                         <el-button type="primary" size="small" @click="showUsageInfo = true">
                           查看用法说明
                         </el-button>
@@ -69,7 +69,7 @@
                           :visible.sync="showUsageInfo"
                           width="60%"
                           :close-on-click-modal="false">
-                        <div class="usage-content">
+                        <div class="usage-content" style="text-align: left;">
                           <p>
                             <strong>"回答风格"</strong> 输入框内的内容是一个高级模板，它决定了 AI 回答的最终结构。
                           </p>
@@ -79,7 +79,6 @@
                           <p v-pre>
                             <strong>特别注意：</strong> 您至少需要在“回答风格”内任意位置填写<code>{{identity}}</code>（角色介绍），否则AI模型将无法接受到您写的角色介绍文本。
                           </p>
-
                           <hr style="border: none; border-top: 1px solid #E4E7ED; margin: 12px 0;" />
 
                           <strong>标签说明：</strong>
@@ -132,7 +131,7 @@
                           :visible.sync="showRenderPreview"
                           width="60%"
                           :close-on-click-modal="false">
-                        <div style="padding: 10px;">
+                        <div style="padding: 10px; text-align: left;">
                           <el-alert
                               type="warning"
                               :closable="false"
@@ -142,21 +141,22 @@
                           </el-alert>
 
                           <p><strong>您当前的角色介绍内容：</strong></p>
-                          <pre style="background-color: #f5f7fa; padding: 8px; border-radius: 4px; font-size: 12px; max-height: 100px; overflow-y: auto;">{{ form.systemPrompt || '未设置角色介绍' }}</pre>
+                          <pre style="background-color: #f5f7fa; padding: 8px; border-radius: 4px; font-size: 12px; max-height: 100px; overflow-y: auto; text-align: left;">{{ form.systemPrompt || '未设置角色介绍' }}</pre>
 
                           <p><strong>回答风格输入框内容：</strong></p>
-                          <pre style="background-color: #f5f7fa; padding: 8px; border-radius: 4px; font-size: 12px; max-height: 150px; overflow-y: auto;">{{ form.reply_style || '未设置回答风格' }}</pre>
+                          <pre style="background-color: #f5f7fa; padding: 8px; border-radius: 4px; font-size: 12px; max-height: 150px; overflow-y: auto; text-align: left;">{{ form.reply_style || '未设置回答风格' }}</pre>
 
                           <p><strong>渲染后效果预览：</strong></p>
-                          <div style="background-color: white; padding: 15px; border-radius: 4px; border: 1px dashed #c0c4cc; max-height: 300px; overflow-y: auto;">
+                          <div style="background-color: white; padding: 15px; border-radius: 4px; border: 1px dashed #c0c4cc; max-height: 300px; overflow-y: auto; text-align: left;">
                             <div v-html="renderPreviewContent"></div>
                           </div>
-                          <p style="font-size: 12px; color: #909399; margin-top: 10px;">
+                          <p style="font-size: 12px; color: #909399; margin-top: 10px; text-align: left;">
                             示例数据：当前时间为8:30，日期为2023年8月18日（星期五），农历七月初四，位置为北京市，天气晴朗25°C
                           </p>
                         </div>
                       </el-dialog>
                     </el-form-item>
+
                     <el-form-item label="记忆：">
                       <el-input type="textarea" rows="6" resize="none" v-model="form.summaryMemory" maxlength="2000"
                                 show-word-limit class="form-textarea"
@@ -408,7 +408,7 @@ export default {
 
       // 处理标签，将它们转换为HTML段落
       content = content.replace(/<(\w+)>([\s\S]*?)<\/\1>/g, function(match, tag, inner) {
-        return `<div style="margin-bottom: 10px;"><strong>${tag}:</strong><p style="margin: 5px 0 0 15px;">${inner.trim()}</p></div>`;
+        return `<div style="margin-bottom: 10px; text-align: left;"><strong>${tag}:</strong><p style="margin: 5px 0 0 15px; text-align: left;">${inner.trim()}</p></div>`;
       });
 
       return content;
