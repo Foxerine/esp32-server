@@ -95,7 +95,7 @@ async def checkWakeupWords(conn, text):
     # 检查是否需要更新唤醒词回复
     if time.time() - response.get("time", 0) > WAKEUP_CONFIG["refresh_time"]:
         if not _wakeup_response_lock.locked():
-            asyncio.create_task(wakeupWordsResponse(conn))
+            await wakeupWordsResponse(conn)
     return True
 
 
