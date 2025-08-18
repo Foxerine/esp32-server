@@ -98,7 +98,7 @@ class Dialogue:
         else:
             self.put(Message(role="system", content=new_content))
 
-    def get_llm_dialogue_with_memory(
+    async def get_llm_dialogue_with_memory(
             self, memory_str: str = None, voiceprint_config: dict = None
     ) -> List[Dict[str, str]]:
         # 构建对话

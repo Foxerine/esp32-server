@@ -1,5 +1,8 @@
+import json
+
 import httpx
-import openai
+from openai import AsyncOpenAI
+
 from openai.types import CompletionUsage
 from config.logger import setup_logging
 from core.utils.util import check_model_key
@@ -7,6 +10,29 @@ from core.providers.llm.base import LLMProviderBase
 
 TAG = __name__
 logger = setup_logging()
+
+
+async def log_request(request):
+    """
+    一个事件钩子函数，用于打印请求的详细信息。
+    """
+    print(f">>> Outgoing request >>>")
+    print(f"Method: {request.method} {request.url}")
+    print(f"Headers: {request.headers}")
+    # request.content 是 bytes 类型，需要解码才能看到字符串
+    if request.content:
+        # 尝试以 utf-8 解码，如果失败则直接打印 bytes
+        try:
+            body = request.content.decode('utf-8')
+            # 尝试格式化 JSON 以便阅读
+            try:
+                parsed_body = json.loads(body)
+                print(f"Body: {json.dumps(parsed_body, indent=2)}")
+            except json.JSONDecodeError:
+                print(f"Body: {body}")
+        except UnicodeDecodeError:
+            print(f"Body (bytes): {request.content}")
+    print(">>> End of request >>>")
 
 
 class LLMProvider(LLMProviderBase):
@@ -46,11 +72,18 @@ class LLMProvider(LLMProviderBase):
         model_key_msg = check_model_key("LLM", self.api_key)
         if model_key_msg:
             logger.bind(tag=TAG).error(model_key_msg)
-        self.client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=httpx.Timeout(self.timeout))
+        self.client = AsyncOpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=httpx.Timeout(self.timeout),
+            http_client=httpx.AsyncClient(
+                event_hooks={'request': [log_request]}
+            )
+        )
 
-    def response(self, session_id, dialogue, **kwargs):
+    async def response(self, session_id, dialogue, **kwargs):
         try:
-            responses = self.client.chat.completions.create(
+            responses = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=dialogue,
                 stream=True,
@@ -60,10 +93,11 @@ class LLMProvider(LLMProviderBase):
                 frequency_penalty=kwargs.get(
                     "frequency_penalty", self.frequency_penalty
                 ),
+                extra_body={"thinking": {"type":"disabled"}} if "doubao-seed-1-6" in self.model_name else None,
             )
 
             is_active = True
-            for chunk in responses:
+            async for chunk in responses:
                 try:
                     # 检查是否存在有效的choice且content不为空
                     delta = (
@@ -88,18 +122,20 @@ class LLMProvider(LLMProviderBase):
         except Exception as e:
             logger.bind(tag=TAG).error(f"Error in response generation: {e}")
 
-    def response_with_functions(self, session_id, dialogue, functions=None):
+    async def response_with_functions(self, session_id, dialogue, functions=None):
         try:
-            stream = self.client.chat.completions.create(
-                model=self.model_name, messages=dialogue, stream=True, tools=functions
+            stream = await self.client.chat.completions.create(
+                model=self.model_name,
+                messages=dialogue,
+                stream=True,
+                tools=functions,
+                extra_body={"thinking": {"type":"disabled"}} if "doubao-seed-1-6" in self.model_name else None,
             )
 
-            for chunk in stream:
+            async for chunk in stream:
                 # 检查是否存在有效的choice且content不为空
                 if getattr(chunk, "choices", None):
-                    yield chunk.choices[0].delta.content, chunk.choices[
-                        0
-                    ].delta.tool_calls
+                    yield chunk.choices[0].delta.content, chunk.choices[0].delta.tool_calls
                 # 存在 CompletionUsage 消息时，生成 Token 消耗 log
                 elif isinstance(getattr(chunk, "usage", None), CompletionUsage):
                     usage_info = getattr(chunk, "usage", None)

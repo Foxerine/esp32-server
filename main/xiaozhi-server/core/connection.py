@@ -668,7 +668,7 @@ class ConnectionHandler:
         # 更新系统prompt至上下文
         self.dialogue.update_system_message(self.prompt)
 
-    def chat(self, query, tool_call=False, depth=0):
+    async def chat(self, query, tool_call=False, depth=0):
         self.logger.bind(tag=TAG).info(f"大模型收到用户消息: {query}")
         self.logger.bind(tag=TAG).info(f"完整历史记录：{str(self.dialogue)}")
 
@@ -698,24 +698,21 @@ class ConnectionHandler:
             # 使用带记忆的对话
             memory_str = None
             if self.memory is not None:
-                future = asyncio.run_coroutine_threadsafe(
-                    self.memory.query_memory(query), self.loop
-                )
-                memory_str = future.result()
+                memory_str = await self.memory.query_memory(query)
 
             if self.intent_type == "function_call" and functions is not None:
                 # 使用支持functions的streaming接口
-                llm_responses = self.llm.response_with_functions(
+                llm_responses_generator = self.llm.response_with_functions(
                     self.session_id,
-                    self.dialogue.get_llm_dialogue_with_memory(
+                    await self.dialogue.get_llm_dialogue_with_memory(
                         memory_str, self.config.get("voiceprint", {})
                     ),
                     functions=functions,
                 )
             else:
-                llm_responses = self.llm.response(
+                llm_responses_generator = self.llm.response(
                     self.session_id,
-                    self.dialogue.get_llm_dialogue_with_memory(
+                    await self.dialogue.get_llm_dialogue_with_memory(
                         memory_str, self.config.get("voiceprint", {})
                     ),
                 )
@@ -730,8 +727,7 @@ class ConnectionHandler:
         function_arguments = ""
         content_arguments = ""
         self.client_abort = False
-        emotion_flag = True
-        for response in llm_responses:
+        async for response in llm_responses_generator:
             if self.client_abort:
                 break
             if self.intent_type == "function_call" and functions is not None:
@@ -756,14 +752,6 @@ class ConnectionHandler:
                         function_arguments += tools_call[0].function.arguments
             else:
                 content = response
-
-            # 在llm回复中获取情绪表情，一轮对话只在开头获取一次
-            if emotion_flag and content is not None and content.strip():
-                asyncio.run_coroutine_threadsafe(
-                    textUtils.get_emotion(self, content),
-                    self.loop,
-                )
-                emotion_flag = False
 
             if content is not None and len(content) > 0:
                 if not tool_call_flag:
@@ -816,13 +804,11 @@ class ConnectionHandler:
                 }
 
                 # 使用统一工具处理器处理所有工具调用
-                result = asyncio.run_coroutine_threadsafe(
-                    self.func_handler.handle_llm_function_call(
-                        self, function_call_data
-                    ),
-                    self.loop,
-                ).result()
-                self._handle_function_result(result, function_call_data, depth=depth)
+                result = await self.func_handler.handle_llm_function_call(
+                    self, function_call_data
+                )
+
+                await self._handle_function_result(result, function_call_data, depth=depth)
 
         # 存储对话内容
         if len(response_message) > 0:
@@ -847,7 +833,7 @@ class ConnectionHandler:
 
         return True
 
-    def _handle_function_result(self, result, function_call_data, depth):
+    async def _handle_function_result(self, result, function_call_data, depth):
         if result.action == Action.RESPONSE:  # 直接回复前端
             text = result.response
             self.tts.tts_one_sentence(self, ContentType.TEXT, content_detail=text)
@@ -884,7 +870,7 @@ class ConnectionHandler:
                         content=text,
                     )
                 )
-                self.chat(text, tool_call=True, depth=depth + 1)
+                await self.chat(text, tool_call=True, depth=depth + 1)
         elif result.action == Action.NOTFOUND or result.action == Action.ERROR:
             text = result.response if result.response else result.result
             self.tts.tts_one_sentence(self, ContentType.TEXT, content_detail=text)

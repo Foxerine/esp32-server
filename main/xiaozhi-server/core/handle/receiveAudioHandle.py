@@ -87,7 +87,7 @@ async def startToChat(conn, text):
 
     # 意图未被处理，继续常规聊天流程，使用实际文本内容
     await send_stt_message(conn, actual_text)
-    conn.executor.submit(conn.chat, actual_text)
+    await conn.chat(actual_text)
 
 
 async def no_voice_close_connect(conn, have_voice):

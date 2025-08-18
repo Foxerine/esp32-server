@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from typing import Generator, Any, AsyncGenerator
+
 from config.logger import setup_logging
 
 TAG = __name__
@@ -6,11 +8,11 @@ logger = setup_logging()
 
 class LLMProviderBase(ABC):
     @abstractmethod
-    def response(self, session_id, dialogue):
+    async def response(self, session_id, dialogue) -> AsyncGenerator:
         """LLM response generator"""
         pass
 
-    def response_no_stream(self, system_prompt, user_prompt, **kwargs):
+    async def response_no_stream(self, system_prompt, user_prompt, **kwargs):
         try:
             # 构造对话格式
             dialogue = [
@@ -18,15 +20,15 @@ class LLMProviderBase(ABC):
                 {"role": "user", "content": user_prompt}
             ]
             result = ""
-            for part in self.response("", dialogue, **kwargs):
+            async for part in self.response("", dialogue, **kwargs):
                 result += part
             return result
 
         except Exception as e:
             logger.bind(tag=TAG).error(f"Error in Ollama response generation: {e}")
             return "【LLM服务响应异常】"
-    
-    def response_with_functions(self, session_id, dialogue, functions=None):
+
+    async def response_with_functions(self, session_id, dialogue, functions=None):
         """
         Default implementation for function calling (streaming)
         This should be overridden by providers that support function calls
@@ -34,6 +36,6 @@ class LLMProviderBase(ABC):
         Returns: generator that yields either text tokens or a special function call token
         """
         # For providers that don't support functions, just return regular response
-        for token in self.response(session_id, dialogue):
+        async for token in self.response(session_id, dialogue):
             yield token, None
 
