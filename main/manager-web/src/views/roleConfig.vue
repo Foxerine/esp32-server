@@ -46,11 +46,11 @@
                     </el-form-item>
                     <el-form-item label="角色介绍：">
                       <el-input type="textarea" rows="9" resize="none" placeholder="请输入角色的详细背景、性格和特点" v-model="form.systemPrompt"
-                                maxlength="2000" show-word-limit class="form-textarea" />
+                                maxlength="3000" show-word-limit class="form-textarea" />
                     </el-form-item>
                     <el-form-item label="回答风格：">
                       <el-input type="textarea" rows="6" resize="none" placeholder="你应该以简短，口语化的方式回答用户的问题，绝对不可以使用任何Markdown格式" v-model="form.reply_style"
-                                maxlength="2000" show-word-limit class="form-textarea" />
+                                maxlength="3000" show-word-limit class="form-textarea" />
                     </el-form-item>
                     <!-- ============== 重构后的用法说明部分（中文版） ============== -->
                     <el-form-item label=" ">
@@ -158,7 +158,7 @@
                     </el-form-item>
 
                     <el-form-item label="记忆：">
-                      <el-input type="textarea" rows="6" resize="none" v-model="form.summaryMemory" maxlength="2000"
+                      <el-input type="textarea" rows="6" resize="none" v-model="form.summaryMemory" maxlength="3000"
                                 show-word-limit class="form-textarea"
                                 :disabled="form.model.memModelId !== 'Memory_mem_local_short'" />
                     </el-form-item>                    <el-form-item label="语言编码：" style="display: none;">
